@@ -32,6 +32,7 @@ namespace Tutan.MessageBus
         public abstract void DrainQueue();
         public abstract int SubscriberCount { get; }
         public abstract bool RemoveEntry(int tokenId);
+        internal abstract IEnumerable<(int TokenId, Delegate Handler)> EnumerateEntries();
     }
 
     /// <summary>
@@ -137,6 +138,16 @@ namespace Tutan.MessageBus
             return false;
         }
 
+        internal override IEnumerable<(int TokenId, Delegate Handler)> EnumerateEntries()
+        {
+            for (int i = 0; i < Entries.Count; i++)
+            {
+                var e = Entries[i];
+                if (e.Active)
+                    yield return (e.TokenId, e.Handler);
+            }
+        }
+
         void CompactIfNeeded()
         {
             if (_dirtyCount == 0) return;
@@ -170,10 +181,19 @@ namespace Tutan.MessageBus
         int _nextTokenId;
         bool _disposed;
 
+        // Used by the optional instrumentation layer to tag records as
+        // originating from the Event or Command bus.
+        readonly MessageBusInstrumentation.BusKind _instrumentationKind;
+
         static readonly ProfilerMarker s_publishMarker = new("MessageBus.Publish");
         static readonly ProfilerMarker s_drainMarker = new("MessageBus.DrainQueues");
 
-        public MessageBus() { }
+        public MessageBus() : this(MessageBusInstrumentation.BusKind.Event) { }
+
+        internal MessageBus(MessageBusInstrumentation.BusKind kind)
+        {
+            _instrumentationKind = kind;
+        }
 
         /// <summary>
         /// Register a handler for message type T. Returns a token for unsubscription.
@@ -188,6 +208,8 @@ namespace Tutan.MessageBus
             Debug.Assert(tokenId != 0, "SubscriptionToken ID wrapped to invalid sentinel.");
             channel.AddEntry(tokenId, handler);
 
+            MessageBusInstrumentation.RecordSubscribe(_instrumentationKind, typeof(T), tokenId, handler);
+
             return new SubscriptionToken(tokenId, typeof(T));
         }
 
@@ -200,7 +222,10 @@ namespace Tutan.MessageBus
             if (!token.IsValid) return false;
             if (!_channels.TryGetValue(token.MessageType, out var channelBase)) return false;
 
-            return channelBase.RemoveEntry(token.Id);
+            bool removed = channelBase.RemoveEntry(token.Id);
+            if (removed)
+                MessageBusInstrumentation.RecordUnsubscribe(_instrumentationKind, token.MessageType, token.Id);
+            return removed;
         }
 
         /// <summary>
@@ -209,6 +234,8 @@ namespace Tutan.MessageBus
         /// </summary>
         public void Publish<T>(ref T message) where T : unmanaged, TBase
         {
+            MessageBusInstrumentation.RecordPublish(_instrumentationKind, ref message);
+
             if (!_channels.TryGetValue(typeof(T), out var channelBase)) return;
 
             using var _ = s_publishMarker.Auto();
@@ -230,6 +257,7 @@ namespace Tutan.MessageBus
         /// </summary>
         public void Enqueue<T>(in T message) where T : unmanaged, TBase
         {
+            MessageBusInstrumentation.RecordEnqueue(_instrumentationKind, in message);
             GetOrCreateChannel<T>().Enqueue(message);
         }
 
@@ -241,10 +269,12 @@ namespace Tutan.MessageBus
         {
             using var _ = s_drainMarker.Auto();
 
+            MessageBusInstrumentation.RecordDrain(_instrumentationKind, start: true);
             foreach (var kvp in _channels)
             {
                 kvp.Value.DrainQueue();
             }
+            MessageBusInstrumentation.RecordDrain(_instrumentationKind, start: false);
         }
 
         public int GetSubscriberCount<T>() where T : unmanaged, TBase
@@ -253,6 +283,16 @@ namespace Tutan.MessageBus
         }
 
         public int ChannelCount => _channels.Count;
+
+        /// <summary>
+        /// Walk all active subscriptions. Editor-only diagnostic — allocates
+        /// per call. Not part of the public API.
+        /// </summary>
+        internal IEnumerable<(Type MessageType, IEnumerable<(int TokenId, Delegate Handler)> Entries)> EnumerateSubscriptions()
+        {
+            foreach (var kvp in _channels)
+                yield return (kvp.Key, kvp.Value.EnumerateEntries());
+        }
 
         Channel<T> GetOrCreateChannel<T>() where T : unmanaged, TBase
         {

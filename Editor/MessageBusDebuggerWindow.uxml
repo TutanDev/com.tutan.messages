@@ -1,0 +1,67 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements"
+         editor-extension-mode="True">
+    <ui:VisualElement name="root" class="mb-root">
+
+        <uie:Toolbar name="toolbar" class="mb-toolbar">
+            <uie:ToolbarToggle name="pause-toggle" text="Pause" tooltip="Pause capture (records still flow but window stops refreshing)." />
+            <uie:ToolbarButton name="clear-button" text="Clear" tooltip="Clear the captured record buffer." />
+            <uie:ToolbarToggle name="payloads-toggle" text="Capture payloads" tooltip="Box message structs into records so payload fields can be inspected. Allocates per Publish/Enqueue." />
+            <ui:VisualElement class="mb-spacer-sm" />
+            <uie:ToolbarToggle name="events-toggle" text="Events" />
+            <uie:ToolbarToggle name="commands-toggle" text="Commands" />
+            <ui:VisualElement class="mb-spacer-sm" />
+            <uie:ToolbarToggle name="op-publish-toggle" text="Publish" />
+            <uie:ToolbarToggle name="op-enqueue-toggle" text="Enqueue" />
+            <uie:ToolbarToggle name="op-subs-toggle" text="Subs" tooltip="Show Subscribe / Unsubscribe records." />
+            <uie:ToolbarToggle name="op-drain-toggle" text="Drains" tooltip="Record drain start/end every frame. Floods the log — off by default." />
+            <ui:VisualElement class="mb-spacer-sm" />
+            <uie:ToolbarSearchField name="search-field" />
+            <ui:VisualElement class="mb-spacer-flex" />
+            <ui:Label name="status-label" class="mb-status" />
+        </uie:Toolbar>
+
+        <ui:VisualElement name="tabs" class="mb-tabs">
+            <ui:Button name="tab-log" text="Log" class="mb-tab mb-tab-active" />
+            <ui:Button name="tab-subs" text="Subscribers" class="mb-tab" />
+            <ui:Button name="tab-stats" text="Stats" class="mb-tab" />
+        </ui:VisualElement>
+
+        <ui:VisualElement name="body" class="mb-body">
+
+            <ui:VisualElement name="log-panel" class="mb-panel">
+                <ui:TwoPaneSplitView fixed-pane-initial-dimension="320" orientation="Horizontal">
+                    <ui:VisualElement class="mb-log-list-wrap">
+                        <ui:ListView name="log-list" fixed-item-height="20" show-alternating-row-backgrounds="ContentOnly" selection-type="Single" />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="mb-detail-wrap">
+                        <ui:Label name="detail-header" text="Select a row to inspect" class="mb-detail-header" />
+                        <ui:ScrollView>
+                            <ui:Label name="detail-body" class="mb-detail-body" />
+                        </ui:ScrollView>
+                    </ui:VisualElement>
+                </ui:TwoPaneSplitView>
+            </ui:VisualElement>
+
+            <ui:VisualElement name="subs-panel" class="mb-panel" style="display:none;">
+                <ui:ScrollView>
+                    <ui:VisualElement name="subs-container" />
+                </ui:ScrollView>
+            </ui:VisualElement>
+
+            <ui:VisualElement name="stats-panel" class="mb-panel" style="display:none;">
+                <ui:VisualElement name="stats-header" class="mb-stats-row mb-stats-head">
+                    <ui:Label text="Type" class="mb-col-type" />
+                    <ui:Label text="Bus" class="mb-col-bus" />
+                    <ui:Label text="Subs" class="mb-col-num" />
+                    <ui:Label text="Total" class="mb-col-num" />
+                    <ui:Label text="Per sec" class="mb-col-num" />
+                    <ui:Label text="Last frame" class="mb-col-num" />
+                </ui:VisualElement>
+                <ui:ScrollView>
+                    <ui:VisualElement name="stats-container" />
+                </ui:ScrollView>
+            </ui:VisualElement>
+
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

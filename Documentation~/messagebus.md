@@ -511,3 +511,67 @@ Scripting Define Symbols:  TUTAN_MESSAGEBUS_DISABLE_AUTOBOOTSTRAP
 When disabled, attach the `MessageBusHost` component to a persistent
 GameObject yourself, or call `CommandBus.DrainQueues()` and
 `EventBus.DrainQueues()` from your own update logic.
+
+---
+
+## 11. Debugger Window
+
+The package ships with an editor window for live introspection of bus traffic,
+similar in spirit to PulseScope: **Window → Tutan → Message Bus Debugger**.
+
+It has three tabs:
+
+- **Log** — virtualized feed of recent `Subscribe`, `Unsubscribe`, `Publish`,
+  `Enqueue`, and drain operations with timestamp, frame, bus (E/C), and type.
+  Selecting a row pretty-prints the payload (if capture is on) and handler
+  details in the right pane.
+- **Subscribers** — every active subscription grouped by message type, showing
+  the handler's target type and method name plus its token id. Refreshes as
+  Subscribe/Unsubscribe records arrive.
+- **Stats** — per-type counts, smoothed events/sec, subscriber count, and the
+  frame the type was last seen on. Sorted by total descending.
+
+Toolbar: **Pause** (freeze the view), **Clear** (empty the ring buffer),
+**Capture payloads** (box struct payloads into records so they can be
+inspected — adds one boxing allocation per `Publish`/`Enqueue`, default off),
+**Events / Commands** toggles, and a search field that filters by full type
+name.
+
+### Runtime cost
+
+The instrumentation hooks on `MessageBus.Publish` / `Enqueue` /
+`Subscribe` / `Unsubscribe` / `DrainQueues` are decorated with:
+
+```csharp
+[Conditional("UNITY_EDITOR"), Conditional("TUTAN_MESSAGEBUS_DEBUG")]
+```
+
+so the C# compiler strips every call site at compile time when neither
+define is set. **In release player builds the bus runs exactly as before
+— no branches, no allocations.**
+
+To enable the window in **development builds** (so QA can capture on-device),
+add the `TUTAN_MESSAGEBUS_DEBUG` scripting define under **Project Settings →
+Player → Scripting Define Symbols** for the target build. In the editor it is
+always available because `UNITY_EDITOR` is always defined.
+
+When the window is closed, `MessageBusInstrumentation.Enabled` is set back to
+`false` and every hook short-circuits on the first branch — so even with the
+defines present, an empty/closed window costs ~one `bool` check per
+`Publish`.
+
+### Programmatic access
+
+`MessageBusInstrumentation` is public and can be used to wire custom
+diagnostics or in-game overlays:
+
+```csharp
+MessageBusInstrumentation.Enabled = true;
+MessageBusInstrumentation.CapturePayloads = true;
+
+// Snapshot the ring buffer (allocates a copy; do it off the hot path).
+var records = MessageBusInstrumentation.Snapshot();
+foreach (var r in records)
+    Debug.Log($"{r.Bus} {r.Op} {r.MessageType?.Name}");
+```
+

@@ -10,7 +10,9 @@ namespace Tutan.MessageBus
     /// </summary>
     public static class CommandBus
     {
-        static MessageBus<ICommand> s_bus = new MessageBus<ICommand>();
+        static MessageBus<ICommand> s_bus = new MessageBus<ICommand>(MessageBusInstrumentation.BusKind.Command);
+
+        internal static MessageBus<ICommand> Bus => s_bus;
 
         /// <summary>
         /// Subscribe to a command. Throws <see cref="InvalidOperationException"/>
@@ -53,7 +55,7 @@ namespace Tutan.MessageBus
         /// Clear all subscriptions and queued messages.
         /// Call during test teardown or scene transitions.
         /// </summary>
-        public static void Reset() { s_bus.Dispose(); s_bus = new MessageBus<ICommand>(); }
+        public static void Reset() { s_bus.Dispose(); s_bus = new MessageBus<ICommand>(MessageBusInstrumentation.BusKind.Command); }
 
         // Wipe static state on every Enter Play Mode so the bus stays clean
         // when the user has disabled Domain Reload (Project Settings →

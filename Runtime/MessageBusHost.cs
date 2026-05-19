@@ -14,6 +14,10 @@ namespace Tutan.MessageBus
     {
         void LateUpdate()
         {
+            // Main-thread frame counter that worker threads can read without
+            // touching UnityEngine.Time. Used by MessageBusInstrumentation.
+            MessageBusInstrumentation.CurrentFrame = Time.frameCount;
+
             CommandBus.DrainQueues();
             EventBus.DrainQueues();
         }
