@@ -1,0 +1,44 @@
+{
+  "name": "com.tutan.messagebus",
+  "displayName": "MessageBus",
+  "version": "0.3.0",
+  "unity": "6000.1",
+  "description": "Zero-allocation, struct-based publish/subscribe message bus for Unity 6 and XR. Ref-passed handlers, integer subscription tokens, thread-safe enqueue, automatic LateUpdate draining, and dedicated EventBus (N:M) and CommandBus (N:1) APIs. Built for XR frame budgets \u2014 no GC in the dispatch hot path.",
+  "keywords": [
+    "messagebus",
+    "pubsub",
+    "events",
+    "messaging",
+    "decoupling",
+    "xr",
+    "performance",
+    "zero-allocation",
+    "event-system",
+    "event-manager",
+    "tools",
+    "architecture"
+  ],
+  "category": "Tools/Integration",
+  "author": {
+    "name": "TutanDev",
+    "url": "https://github.com/TutanDev/",
+    "email": "andrespino.95@gmail.com"
+  },
+  "samples": [
+    {
+      "displayName": "Basic Publish / Subscribe",
+      "description": "Minimal EventBus and CommandBus usage in a single scene.",
+      "path": "Samples~/BasicPubSub"
+    },
+    {
+      "displayName": "Threaded Dispatch",
+      "description": "Enqueue messages from a worker thread, drain on the main thread.",
+      "path": "Samples~/ThreadedDispatch"
+    },
+    {
+      "displayName": "XR Hand Gesture",
+      "description": "One input source, multiple decoupled subscribers (UI, analytics, haptics).",
+      "path": "Samples~/XRHandGesture"
+    }
+  ]
+}

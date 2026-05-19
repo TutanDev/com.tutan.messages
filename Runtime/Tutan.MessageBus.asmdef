@@ -1,0 +1,7 @@
+{
+    "name": "Tutan.MessageBus",
+    "rootNamespace": "Tutan.MessageBus",
+    "references": [],
+    "autoReferenced": true,
+    "noEngineReferences": false
+}
