@@ -23,51 +23,33 @@ namespace Tutan.MessageBus.Editor
         const string UxmlPath = "Packages/com.tutan.messages/Editor/MessageBusDebuggerWindow.uxml";
         const string UssPath = "Packages/com.tutan.messages/Editor/MessageBusDebuggerWindow.uss";
 
-        [MenuItem("Window/Tutan/Message Bus Debugger")]
+        [MenuItem("Window/Tutan/Messages Console")]
         public static void Open()
         {
             var w = GetWindow<MessageBusDebuggerWindow>();
-            w.titleContent = new GUIContent("Message Bus");
+            w.titleContent = new GUIContent("Messages Console");
             w.minSize = new Vector2(640, 320);
             w.Show();
         }
 
         // ── State ────────────────────────────────────────────────────────
         readonly List<MessageBusInstrumentation.Record> _filtered = new();
-        readonly Dictionary<(MessageBusInstrumentation.BusKind bus, Type type), StatRow> _stats = new();
         bool _paused;
         bool _showEvents = true;
         bool _showCommands = true;
         bool _showPublish = true;
         bool _showEnqueue = true;
         bool _showSubs = true;
-        bool _showDrains; // recording is also gated by MessageBusInstrumentation.RecordDrains
+        bool _showDrains;
         string _search = string.Empty;
-        long _lastTotalEver;
-
-        // Active tab
-        enum Tab { Log, Subs, Stats }
-        Tab _tab = Tab.Log;
+        long _lastTotalProcessed;
 
         // Element refs
         ListView _logList;
         Label _detailHeader;
         Label _detailBody;
-        VisualElement _logPanel, _subsPanel, _statsPanel;
-        Button _tabLog, _tabSubs, _tabStats;
-        VisualElement _subsContainer, _statsContainer;
+        VisualElement _logPanel;
         Label _statusLabel;
-
-        // Stats book-keeping
-        sealed class StatRow
-        {
-            public Type Type;
-            public MessageBusInstrumentation.BusKind Bus;
-            public long Total;
-            public int LastFrame;
-            public long LastTicks;
-            public float Ema; // events/sec, smoothed
-        }
 
         // ── Lifecycle ────────────────────────────────────────────────────
         void OnEnable()
@@ -83,23 +65,21 @@ namespace Tutan.MessageBus.Editor
             if (uss != null) rootVisualElement.styleSheets.Add(uss);
 
             BindToolbar();
-            BindTabs();
             BindLog();
 
-            _subsContainer = rootVisualElement.Q<VisualElement>("subs-container");
-            _statsContainer = rootVisualElement.Q<VisualElement>("stats-container");
             _statusLabel = rootVisualElement.Q<Label>("status-label");
 
             MessageBusInstrumentation.Enabled = true;
             EditorApplication.update += Tick;
+            
+            // Sync initial state
+            _lastTotalProcessed = MessageBusInstrumentation.TotalEver;
         }
 
         void OnDisable()
         {
             EditorApplication.update -= Tick;
             MessageBusInstrumentation.Enabled = false;
-            MessageBusInstrumentation.CapturePayloads = false;
-            MessageBusInstrumentation.RecordDrains = false;
         }
 
         // ── UI Wiring ────────────────────────────────────────────────────
@@ -111,10 +91,9 @@ namespace Tutan.MessageBus.Editor
             rootVisualElement.Q<ToolbarButton>("clear-button").clicked += () =>
             {
                 MessageBusInstrumentation.Clear();
-                _stats.Clear();
                 _filtered.Clear();
                 _logList?.RefreshItems();
-                _lastTotalEver = MessageBusInstrumentation.TotalEver;
+                _lastTotalProcessed = MessageBusInstrumentation.TotalEver;
             };
 
             var payloads = rootVisualElement.Q<ToolbarToggle>("payloads-toggle");
@@ -123,25 +102,34 @@ namespace Tutan.MessageBus.Editor
 
             var events = rootVisualElement.Q<ToolbarToggle>("events-toggle");
             events.SetValueWithoutNotify(true);
-            events.RegisterValueChangedCallback(e => _showEvents = e.newValue);
+            events.RegisterValueChangedCallback(e => { _showEvents = e.newValue; FullRebuild(); });
 
             var commands = rootVisualElement.Q<ToolbarToggle>("commands-toggle");
             commands.SetValueWithoutNotify(true);
-            commands.RegisterValueChangedCallback(e => _showCommands = e.newValue);
+            commands.RegisterValueChangedCallback(e => { _showCommands = e.newValue; FullRebuild(); });
 
-            BindOpToggle("op-publish-toggle", true, v => _showPublish = v);
-            BindOpToggle("op-enqueue-toggle", true, v => _showEnqueue = v);
-            BindOpToggle("op-subs-toggle", true, v => _showSubs = v);
+            BindOpToggle("op-publish-toggle", true, v => { _showPublish = v; FullRebuild(); });
+            BindOpToggle("op-enqueue-toggle", true, v => { _showEnqueue = v; FullRebuild(); });
+            BindOpToggle("op-subs-toggle", true, v => { _showSubs = v; FullRebuild(); });
+            
             var drainToggle = rootVisualElement.Q<ToolbarToggle>("op-drain-toggle");
             drainToggle.SetValueWithoutNotify(false);
             drainToggle.RegisterValueChangedCallback(e =>
             {
                 _showDrains = e.newValue;
                 MessageBusInstrumentation.RecordDrains = e.newValue;
+                FullRebuild();
             });
 
             var search = rootVisualElement.Q<ToolbarSearchField>("search-field");
-            search.RegisterValueChangedCallback(e => _search = e.newValue ?? string.Empty);
+            search.RegisterValueChangedCallback(e => { _search = e.newValue ?? string.Empty; FullRebuild(); });
+        }
+
+        void FullRebuild()
+        {
+            _filtered.Clear();
+            _lastTotalProcessed = MessageBusInstrumentation.TotalEver - MessageBusInstrumentation.Count;
+            // Next Tick will catch up from the start of the buffer
         }
 
         void BindOpToggle(string name, bool initial, Action<bool> setter)
@@ -151,39 +139,9 @@ namespace Tutan.MessageBus.Editor
             t.RegisterValueChangedCallback(e => setter(e.newValue));
         }
 
-        void BindTabs()
-        {
-            _logPanel = rootVisualElement.Q<VisualElement>("log-panel");
-            _subsPanel = rootVisualElement.Q<VisualElement>("subs-panel");
-            _statsPanel = rootVisualElement.Q<VisualElement>("stats-panel");
-            _tabLog = rootVisualElement.Q<Button>("tab-log");
-            _tabSubs = rootVisualElement.Q<Button>("tab-subs");
-            _tabStats = rootVisualElement.Q<Button>("tab-stats");
-            _tabLog.clicked += () => SetTab(Tab.Log);
-            _tabSubs.clicked += () => SetTab(Tab.Subs);
-            _tabStats.clicked += () => SetTab(Tab.Stats);
-            SetTab(Tab.Log);
-        }
-
-        void SetTab(Tab t)
-        {
-            _tab = t;
-            _logPanel.style.display = t == Tab.Log ? DisplayStyle.Flex : DisplayStyle.None;
-            _subsPanel.style.display = t == Tab.Subs ? DisplayStyle.Flex : DisplayStyle.None;
-            _statsPanel.style.display = t == Tab.Stats ? DisplayStyle.Flex : DisplayStyle.None;
-            SetActive(_tabLog, t == Tab.Log);
-            SetActive(_tabSubs, t == Tab.Subs);
-            SetActive(_tabStats, t == Tab.Stats);
-        }
-
-        static void SetActive(Button b, bool active)
-        {
-            if (active) b.AddToClassList("mb-tab-active");
-            else b.RemoveFromClassList("mb-tab-active");
-        }
-
         void BindLog()
         {
+            _logPanel = rootVisualElement.Q<VisualElement>("log-panel");
             _logList = rootVisualElement.Q<ListView>("log-list");
             _logList.itemsSource = _filtered;
             _logList.makeItem = MakeLogRow;
@@ -197,11 +155,11 @@ namespace Tutan.MessageBus.Editor
         {
             var row = new VisualElement();
             row.AddToClassList("mb-log-row");
-            row.Add(new Label { name = "time", text = "" }.WithClass("mb-log-col-time"));
-            row.Add(new Label { name = "frame", text = "" }.WithClass("mb-log-col-frame"));
-            row.Add(new Label { name = "bus", text = "" }.WithClass("mb-log-col-bus"));
-            row.Add(new Label { name = "op", text = "" }.WithClass("mb-log-col-op"));
-            row.Add(new Label { name = "type", text = "" }.WithClass("mb-log-col-type"));
+            row.Add(new Label { name = "time" }.WithClass("mb-log-col-time"));
+            row.Add(new Label { name = "frame" }.WithClass("mb-log-col-frame"));
+            row.Add(new Label { name = "bus" }.WithClass("mb-log-col-bus"));
+            row.Add(new Label { name = "op" }.WithClass("mb-log-col-op"));
+            row.Add(new Label { name = "type" }.WithClass("mb-log-col-type"));
             return row;
         }
 
@@ -244,57 +202,45 @@ namespace Tutan.MessageBus.Editor
             if (_paused) return;
 
             long total = MessageBusInstrumentation.TotalEver;
-            if (total == _lastTotalEver) { UpdateStatus(); return; }
-            _lastTotalEver = total;
+            if (total == _lastTotalProcessed) 
+            { 
+                UpdateStatus(); 
+                return; 
+            }
 
-            RebuildFilteredAndStats();
+            ProcessIncremental(total);
 
-            if (_tab == Tab.Log)
-                _logList.RefreshItems();
-            else if (_tab == Tab.Subs)
-                RebuildSubscribersTab();
-            else
-                RebuildStatsTab();
+            _logList.RefreshItems();
 
             UpdateStatus();
             Repaint();
         }
 
-        void RebuildFilteredAndStats()
+        void ProcessIncremental(long totalEver)
         {
-            _filtered.Clear();
-            var all = MessageBusInstrumentation.Snapshot();
-            long nowTicks = DateTime.UtcNow.Ticks;
-            const float emaDecaySeconds = 1f;
+            var snapshot = MessageBusInstrumentation.Snapshot();
+            int currentCount = snapshot.Count;
+            
+            int capacity = MessageBusInstrumentation.Capacity;
+            int newCount = (int)Math.Min(currentCount, totalEver - _lastTotalProcessed);
+            
+            if (newCount <= 0) return;
 
-            // Decay all EMA rows toward zero so stale types fade out.
-            foreach (var s in _stats.Values)
+            int startIdx = currentCount - newCount;
+            for (int i = startIdx; i < currentCount; i++)
             {
-                float dt = (float)TimeSpan.FromTicks(Math.Max(0, nowTicks - s.LastTicks)).TotalSeconds;
-                s.Ema *= Mathf.Exp(-dt / emaDecaySeconds);
-            }
-
-            for (int i = 0; i < all.Count; i++)
-            {
-                var r = all[i];
-                if (!PassesFilter(r)) continue;
-                _filtered.Add(r);
-
-                if (r.Op == MessageBusInstrumentation.Op.Publish || r.Op == MessageBusInstrumentation.Op.Enqueue)
+                var r = snapshot[i];
+                
+                // Filtering for Log
+                if (PassesFilter(r))
                 {
-                    if (r.MessageType == null) continue;
-                    var key = (r.Bus, r.MessageType);
-                    if (!_stats.TryGetValue(key, out var s))
-                    {
-                        s = new StatRow { Type = r.MessageType, Bus = r.Bus, LastTicks = r.TimestampTicks };
-                        _stats[key] = s;
-                    }
-                    s.Total++;
-                    s.LastFrame = r.Frame;
-                    s.Ema += 1f; // each event contributes 1 to the smoothed rate
-                    s.LastTicks = r.TimestampTicks;
+                    _filtered.Add(r);
+                    if (_filtered.Count > capacity)
+                        _filtered.RemoveAt(0);
                 }
             }
+
+            _lastTotalProcessed = totalEver;
         }
 
         bool PassesFilter(MessageBusInstrumentation.Record r)
@@ -323,80 +269,7 @@ namespace Tutan.MessageBus.Editor
         void UpdateStatus()
         {
             if (_statusLabel == null) return;
-            _statusLabel.text = $"{MessageBusInstrumentation.Count} records · total {MessageBusInstrumentation.TotalEver}";
-        }
-
-        // ── Subscribers tab ──────────────────────────────────────────────
-        void RebuildSubscribersTab()
-        {
-            _subsContainer.Clear();
-            AddSubscriberSection("Events (EventBus)", EventBus.Bus.EnumerateSubscriptions());
-            AddSubscriberSection("Commands (CommandBus)", CommandBus.Bus.EnumerateSubscriptions());
-        }
-
-        void AddSubscriberSection(string header, IEnumerable<(Type MessageType, IEnumerable<(int TokenId, Delegate Handler)> Entries)> subs)
-        {
-            var headerLabel = new Label(header);
-            headerLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
-            headerLabel.style.marginTop = 6;
-            _subsContainer.Add(headerLabel);
-
-            bool any = false;
-            foreach (var (type, entries) in subs)
-            {
-                any = true;
-                var typeLabel = new Label(type.FullName ?? type.Name);
-                typeLabel.AddToClassList("mb-subs-type");
-                _subsContainer.Add(typeLabel);
-
-                foreach (var (tokenId, handler) in entries)
-                {
-                    string target = handler?.Target?.GetType().FullName ?? "(static)";
-                    string method = handler?.Method?.Name ?? "?";
-                    var line = new Label($"#{tokenId}  {target}.{method}");
-                    line.AddToClassList("mb-subs-entry");
-                    _subsContainer.Add(line);
-                }
-            }
-            if (!any)
-            {
-                var empty = new Label("    (no active subscriptions)");
-                empty.style.color = new StyleColor(new Color(0.6f, 0.6f, 0.6f));
-                _subsContainer.Add(empty);
-            }
-        }
-
-        // ── Stats tab ────────────────────────────────────────────────────
-        void RebuildStatsTab()
-        {
-            _statsContainer.Clear();
-            var sorted = new List<StatRow>(_stats.Values);
-            sorted.Sort((a, b) => b.Total.CompareTo(a.Total));
-            foreach (var s in sorted)
-            {
-                var row = new VisualElement();
-                row.AddToClassList("mb-stats-row");
-                row.Add(new Label(s.Type.Name).WithClass("mb-col-type"));
-                row.Add(new Label(s.Bus.ToString()).WithClass("mb-col-bus"));
-                int subs = SubscriberCountFor(s.Bus, s.Type);
-                row.Add(new Label(subs.ToString()).WithClass("mb-col-num"));
-                row.Add(new Label(s.Total.ToString()).WithClass("mb-col-num"));
-                row.Add(new Label(s.Ema.ToString("F1", CultureInfo.InvariantCulture)).WithClass("mb-col-num"));
-                row.Add(new Label("f" + s.LastFrame).WithClass("mb-col-num"));
-                _statsContainer.Add(row);
-            }
-        }
-
-        static int SubscriberCountFor(MessageBusInstrumentation.BusKind bus, Type type)
-        {
-            // Reflection: call MessageBus.GetSubscriberCount<T>() because we don't
-            // know T at compile time here.
-            object busInstance = bus == MessageBusInstrumentation.BusKind.Event
-                ? (object)EventBus.Bus
-                : (object)CommandBus.Bus;
-            var mi = busInstance.GetType().GetMethod(nameof(MessageBus<IMessage>.GetSubscriberCount));
-            var generic = mi.MakeGenericMethod(type);
-            return (int)generic.Invoke(busInstance, null);
+            _statusLabel.text = $"{_filtered.Count} visible · {MessageBusInstrumentation.Count} total records";
         }
 
         // ── Payload formatting ───────────────────────────────────────────
@@ -423,23 +296,71 @@ namespace Tutan.MessageBus.Editor
             {
                 sb.Append("Payload: (capture disabled — toggle \"Capture payloads\" to inspect)\n");
             }
+
+            if (r.MessageType != null && (r.Op == MessageBusInstrumentation.Op.Publish || r.Op == MessageBusInstrumentation.Op.Enqueue))
+            {
+                sb.Append("\nSubscribers (Current):\n");
+                AppendSubscribers(sb, r.Bus, r.MessageType);
+            }
+
             return sb.ToString();
+        }
+
+        static void AppendSubscribers(StringBuilder sb, MessageBusInstrumentation.BusKind bus, Type type)
+        {
+            IEnumerable<(Type MessageType, IEnumerable<(int TokenId, Delegate Handler)> Entries)> allSubs;
+            if (bus == MessageBusInstrumentation.BusKind.Event)
+                allSubs = EventBus.Bus.EnumerateSubscriptions();
+            else
+                allSubs = CommandBus.Bus.EnumerateSubscriptions();
+
+            bool found = false;
+            foreach (var group in allSubs)
+            {
+                if (group.MessageType == type)
+                {
+                    foreach (var entry in group.Entries)
+                    {
+                        found = true;
+                        string target = entry.Handler?.Target?.GetType().FullName ?? "(static)";
+                        string method = entry.Handler?.Method?.Name ?? "?";
+                        sb.Append("  #").Append(entry.TokenId).Append(" ").Append(target).Append('.').Append(method).Append('\n');
+                    }
+                    break;
+                }
+            }
+
+            if (!found)
+                sb.Append("  (none)\n");
         }
 
         static void FormatPayload(StringBuilder sb, object payload)
         {
             var t = payload.GetType();
-            var fields = t.GetFields(BindingFlags.Public | BindingFlags.Instance);
-            if (fields.Length == 0)
+            const BindingFlags flags = BindingFlags.Public | BindingFlags.Instance;
+            
+            var fields = t.GetFields(flags);
+            var props = t.GetProperties(flags);
+
+            if (fields.Length == 0 && props.Length == 0)
             {
-                sb.Append("  (no public fields)\n");
+                sb.Append("  (no public fields or properties)\n");
                 return;
             }
+
             foreach (var f in fields)
             {
                 object value;
                 try { value = f.GetValue(payload); } catch { value = "<error>"; }
-                sb.Append("  ").Append(f.Name).Append(" = ").Append(value).Append('\n');
+                sb.Append("  ").Append(f.Name).Append(" = ").Append(value ?? "null").Append('\n');
+            }
+
+            foreach (var p in props)
+            {
+                if (!p.CanRead) continue;
+                object value;
+                try { value = p.GetValue(payload); } catch { value = "<error>"; }
+                sb.Append("  ").Append(p.Name).Append(" = ").Append(value ?? "null").Append('\n');
             }
         }
     }

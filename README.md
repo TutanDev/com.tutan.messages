@@ -63,9 +63,9 @@ Three samples included, importable from the Package Manager:
 
 ## Full documentation
 
-See `Documentation~/messagebus.md` for the complete API reference, threading
-model, performance characteristics, edge-case behavior, and architectural
-guidance.
+See [`docs/index.md`](docs/index.md) for the complete documentation site —
+API reference, threading model, performance characteristics, edge-case
+behavior, architectural guidance, and editor tooling.
 
 ## Support
 

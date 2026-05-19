@@ -282,6 +282,11 @@ namespace Tutan.MessageBus
             return _channels.TryGetValue(typeof(T), out var ch) ? ch.SubscriberCount : 0;
         }
 
+        public int GetSubscriberCount(Type type)
+        {
+            return _channels.TryGetValue(type, out var ch) ? ch.SubscriberCount : 0;
+        }
+
         public int ChannelCount => _channels.Count;
 
         /// <summary>
