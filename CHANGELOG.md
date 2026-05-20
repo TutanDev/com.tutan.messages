@@ -2,6 +2,45 @@
 
 All notable changes to `com.tutan.messagebus` will be documented in this file.
 
+## [0.4.0] - 2026-05-20
+
+### Added
+- **Messages Console** editor window (`Window → Tutan → Messages Console`).
+  Virtualized log of recent `Subscribe`/`Unsubscribe`/`Publish`/`Enqueue` (and
+  optional drain) operations with timestamp, frame, bus (E/C), op, and type.
+  Row selection pretty-prints the payload and lists current subscribers for
+  the selected message type. Toolbar exposes Pause, Clear, Capture payloads,
+  Events/Commands toggles, per-op toggles, and full-type-name search.
+- **`MessageBusInstrumentation`** public static surface — `Enabled`,
+  `CapturePayloads`, `Snapshot()` — for wiring custom diagnostics or in-game
+  overlays. All hooks decorated with
+  `[Conditional("UNITY_EDITOR"), Conditional("TUTAN_MESSAGEBUS_DEBUG")]` so
+  release player builds are unaffected (no branches, no allocations).
+- **`TUTAN_MESSAGEBUS_DEBUG`** scripting define — opt-in flag that enables
+  the instrumentation hooks in development player builds for on-device QA
+  capture. Editor builds always have instrumentation available via
+  `UNITY_EDITOR`.
+- **`EventReference` / `CommandReference`** — serializable wrappers for
+  inspector-driven message authoring. Type dropdown, reflection-based field
+  editor (`int`, `float`, `bool`, `string`, `Vector3`, `Color`, `enum`), and
+  an inline publish button. Intended for editor/authoring workflows only —
+  `Publish()` boxes the struct and uses reflection, so it is not safe for
+  per-frame gameplay dispatch.
+- **`[MessageType]`** attribute — decorate a `string` field to render a
+  dropdown of message types in the Inspector; stores the selected
+  `AssemblyQualifiedName`. Optional `Type` filter narrows the dropdown to
+  `IEvent` or `ICommand` assignability.
+- Inline editor convention: a field literally named `Timestamp` is skipped
+  by the reflection editor and auto-populated at publish time (`float` →
+  `Time.time`, `double` → `(double)Time.time`, `long` →
+  `DateTime.UtcNow.Ticks`).
+
+### Notes
+- Instrumentation is off by default; the closed-window state holds
+  `MessageBusInstrumentation.Enabled = false`, so every hook short-circuits
+  on its first branch (~one `bool` check per `Publish`) even when the
+  defines are present.
+
 ## [0.3.0] - 2026-05-19
 
 ### Fixed
