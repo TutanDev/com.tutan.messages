@@ -1,8 +1,8 @@
 // ============================================================================
-// MessageBusDebuggerWindow.cs — Live view of EventBus / CommandBus traffic.
+// MessagesDebuggerWindow.cs — Live view of EventBus / CommandBus traffic.
 //
 // Opens via "Window → Tutan → Message Bus Debugger". While open it sets
-// MessageBusInstrumentation.Enabled = true; while closed it disables it again
+// MessagesInstrumentation.Enabled = true; while closed it disables it again
 // so the bus pays no instrumentation cost when nobody is looking.
 // ============================================================================
 
@@ -16,35 +16,34 @@ using UnityEditor.UIElements;
 using UnityEngine;
 using UnityEngine.UIElements;
 
-namespace Tutan.MessageBus.Editor
+namespace Tutan.Messages.Editor
 {
-    public sealed class MessageBusDebuggerWindow : EditorWindow
+    public sealed class MessagesDebuggerWindow : EditorWindow
     {
-        const string UxmlPath = "Packages/com.tutan.messages/Editor/MessageBusDebuggerWindow.uxml";
-        const string UssPath = "Packages/com.tutan.messages/Editor/MessageBusDebuggerWindow.uss";
+        const string UxmlPath = "Packages/com.tutan.messages/Editor/MessagesDebuggerWindow.uxml";
+        const string UssPath = "Packages/com.tutan.messages/Editor/MessagesDebuggerWindow.uss";
 
         // Persisted filter preferences. Kept in EditorPrefs so the user's filter setup
         // survives domain reloads (notably entering Play mode) and window reopen.
-        const string KeyEvents = "Tutan.MessageBus.Debugger.Events";
-        const string KeyCommands = "Tutan.MessageBus.Debugger.Commands";
-        const string KeyPublish = "Tutan.MessageBus.Debugger.Publish";
-        const string KeyEnqueue = "Tutan.MessageBus.Debugger.Enqueue";
-        const string KeySubs = "Tutan.MessageBus.Debugger.Subs";
-        const string KeyDrains = "Tutan.MessageBus.Debugger.Drains";
-        const string KeyPayloads = "Tutan.MessageBus.Debugger.Payloads";
-        const string KeyAutoScroll = "Tutan.MessageBus.Debugger.AutoScroll";
+        const string KeyEvents = "Tutan.Messages.Debugger.Events";
+        const string KeyCommands = "Tutan.Messages.Debugger.Commands";
+        const string KeyPublish = "Tutan.Messages.Debugger.Publish";
+        const string KeyEnqueue = "Tutan.Messages.Debugger.Enqueue";
+        const string KeySubs = "Tutan.Messages.Debugger.Subs";
+        const string KeyDrains = "Tutan.Messages.Debugger.Drains";
+        const string KeyAutoScroll = "Tutan.Messages.Debugger.AutoScroll";
 
         [MenuItem("Window/Tutan/Messages Console")]
         public static void Open()
         {
-            var w = GetWindow<MessageBusDebuggerWindow>();
+            var w = GetWindow<MessagesDebuggerWindow>();
             w.titleContent = new GUIContent("Messages Console");
             w.minSize = new Vector2(640, 320);
             w.Show();
         }
 
         // ── State ────────────────────────────────────────────────────────
-        readonly List<MessageBusInstrumentation.Record> _filtered = new();
+        readonly List<MessagesInstrumentation.Record> _filtered = new();
         bool _paused;
         bool _showEvents = true;
         bool _showCommands = true;
@@ -60,6 +59,9 @@ namespace Tutan.MessageBus.Editor
         ListView _logList;
         Label _detailHeader;
         Label _detailBody;
+        VisualElement _detailTypeSection;
+        VisualElement _detailPayloadSection;
+        VisualElement _detailSubsSection;
         VisualElement _logPanel;
         Label _statusLabel;
 
@@ -68,17 +70,17 @@ namespace Tutan.MessageBus.Editor
         // no cost when nobody is looking. UI construction lives in CreateGUI().
         void OnEnable()
         {
-            MessageBusInstrumentation.Enabled = true;
+            MessagesInstrumentation.Enabled = true;
             EditorApplication.update += Tick;
 
             // Sync initial state
-            _lastTotalProcessed = MessageBusInstrumentation.TotalEver;
+            _lastTotalProcessed = MessagesInstrumentation.TotalEver;
         }
 
         void OnDisable()
         {
             EditorApplication.update -= Tick;
-            MessageBusInstrumentation.Enabled = false;
+            MessagesInstrumentation.Enabled = false;
         }
 
         // CreateGUI runs on open AND after every domain reload — keep it idempotent
@@ -116,8 +118,8 @@ namespace Tutan.MessageBus.Editor
             _showSubs = EditorPrefs.GetBool(KeySubs, true);
             _showDrains = EditorPrefs.GetBool(KeyDrains, false);
             _autoScroll = EditorPrefs.GetBool(KeyAutoScroll, true);
-            MessageBusInstrumentation.CapturePayloads = EditorPrefs.GetBool(KeyPayloads, MessageBusInstrumentation.CapturePayloads);
-            MessageBusInstrumentation.RecordDrains = _showDrains;
+            MessagesInstrumentation.CapturePayloads = true;
+            MessagesInstrumentation.RecordDrains = _showDrains;
         }
 
         // ── UI Wiring ────────────────────────────────────────────────────
@@ -129,20 +131,16 @@ namespace Tutan.MessageBus.Editor
 
             rootVisualElement.Q<ToolbarButton>("clear-button").clicked += () =>
             {
-                MessageBusInstrumentation.Clear();
+                MessagesInstrumentation.Clear();
                 _filtered.Clear();
                 _logList?.RefreshItems();
-                _lastTotalProcessed = MessageBusInstrumentation.TotalEver;
+                _lastTotalProcessed = MessagesInstrumentation.TotalEver;
                 UpdateStatus();
             };
 
             var autoScroll = rootVisualElement.Q<ToolbarToggle>("autoscroll-toggle");
             autoScroll.SetValueWithoutNotify(_autoScroll);
             autoScroll.RegisterValueChangedCallback(e => { _autoScroll = e.newValue; EditorPrefs.SetBool(KeyAutoScroll, e.newValue); });
-
-            var payloads = rootVisualElement.Q<ToolbarToggle>("payloads-toggle");
-            payloads.SetValueWithoutNotify(MessageBusInstrumentation.CapturePayloads);
-            payloads.RegisterValueChangedCallback(e => { MessageBusInstrumentation.CapturePayloads = e.newValue; EditorPrefs.SetBool(KeyPayloads, e.newValue); });
 
             var events = rootVisualElement.Q<ToolbarToggle>("events-toggle");
             events.SetValueWithoutNotify(_showEvents);
@@ -161,7 +159,7 @@ namespace Tutan.MessageBus.Editor
             drainToggle.RegisterValueChangedCallback(e =>
             {
                 _showDrains = e.newValue;
-                MessageBusInstrumentation.RecordDrains = e.newValue;
+                MessagesInstrumentation.RecordDrains = e.newValue;
                 EditorPrefs.SetBool(KeyDrains, e.newValue);
                 FullRebuild();
             });
@@ -173,7 +171,7 @@ namespace Tutan.MessageBus.Editor
         void FullRebuild()
         {
             _filtered.Clear();
-            _lastTotalProcessed = MessageBusInstrumentation.TotalEver - MessageBusInstrumentation.Count;
+            _lastTotalProcessed = MessagesInstrumentation.TotalEver - MessagesInstrumentation.Count;
             // Next Tick will catch up from the start of the buffer
         }
 
@@ -194,6 +192,9 @@ namespace Tutan.MessageBus.Editor
             _logList.selectionChanged += OnRowSelected;
             _detailHeader = rootVisualElement.Q<Label>("detail-header");
             _detailBody = rootVisualElement.Q<Label>("detail-body");
+            _detailTypeSection = rootVisualElement.Q<VisualElement>("detail-type-section");
+            _detailPayloadSection = rootVisualElement.Q<VisualElement>("detail-payload-section");
+            _detailSubsSection = rootVisualElement.Q<VisualElement>("detail-subs-section");
         }
 
         static VisualElement MakeLogRow()
@@ -228,10 +229,10 @@ namespace Tutan.MessageBus.Editor
 
             time.text = new DateTime(r.TimestampTicks, DateTimeKind.Utc).ToLocalTime().ToString("HH:mm:ss.fff", CultureInfo.InvariantCulture);
             frame.text = "f" + r.Frame.ToString(CultureInfo.InvariantCulture);
-            bus.text = r.Bus == MessageBusInstrumentation.BusKind.Event ? "E" : "C";
+            bus.text = r.Bus == MessagesInstrumentation.BusKind.Event ? "E" : "C";
             bus.RemoveFromClassList("mb-log-bus-event");
             bus.RemoveFromClassList("mb-log-bus-command");
-            bus.AddToClassList(r.Bus == MessageBusInstrumentation.BusKind.Event ? "mb-log-bus-event" : "mb-log-bus-command");
+            bus.AddToClassList(r.Bus == MessagesInstrumentation.BusKind.Event ? "mb-log-bus-event" : "mb-log-bus-command");
             op.text = r.Op.ToString();
             type.text = r.MessageType?.Name ?? "(drain)";
         }
@@ -240,13 +241,92 @@ namespace Tutan.MessageBus.Editor
         {
             foreach (var o in selection)
             {
-                if (o is MessageBusInstrumentation.Record r)
+                if (o is MessagesInstrumentation.Record r)
                 {
-                    _detailHeader.text = $"{r.Op} {r.Bus} :: {r.MessageType?.FullName ?? "-"}";
-                    _detailBody.text = FormatRecord(r);
+                    _detailHeader.text = $"{r.Op} {r.Bus}";
+                    var body = FormatRecord(r);
+                    _detailBody.text = body;
+                    _detailBody.style.display = body.Length == 0 ? DisplayStyle.None : DisplayStyle.Flex;
+                    BuildDetailSections(r);
                     return;
                 }
             }
+        }
+
+        // Render the message type and the captured subscribers as clickable
+        // ScriptFileFields: single-click pings the .cs file, double-click opens it.
+        void BuildDetailSections(MessagesInstrumentation.Record r)
+        {
+            _detailTypeSection.Clear();
+            _detailPayloadSection.Clear();
+            _detailSubsSection.Clear();
+
+            if (r.MessageType != null)
+            {
+                _detailTypeSection.Add(SectionHeader("Message Type"));
+                var field = new ScriptFileField();
+                field.SetType(r.MessageType);
+                field.text = r.MessageType.FullName;
+                _detailTypeSection.Add(field);
+            }
+
+            bool isFire = r.Op == MessagesInstrumentation.Op.Publish || r.Op == MessagesInstrumentation.Op.Enqueue;
+
+            // Payload sits right after the message type so the struct contents
+            // read next to the type that defines them.
+            if (r.PayloadBox != null)
+            {
+                _detailPayloadSection.Add(SectionHeader("Payload"));
+                var sb = new StringBuilder();
+                FormatPayload(sb, r.PayloadBox);
+                var payloadLabel = new Label(sb.ToString());
+                payloadLabel.AddToClassList("mb-detail-body");
+                _detailPayloadSection.Add(payloadLabel);
+            }
+            else if (isFire)
+            {
+                _detailPayloadSection.Add(SectionHeader("Payload"));
+                _detailPayloadSection.Add(DimNote("(not captured — recorded before this window opened)"));
+            }
+
+            if (!isFire) return;
+
+            string when = r.Op == MessagesInstrumentation.Op.Publish ? "publish" : "enqueue";
+            _detailSubsSection.Add(SectionHeader($"Subscribers (at {when} time)"));
+
+            var subs = r.Subscribers;
+            if (subs == null)
+            {
+                _detailSubsSection.Add(DimNote("(not captured)"));
+            }
+            else if (subs.Length == 0)
+            {
+                _detailSubsSection.Add(DimNote("(none)"));
+            }
+            else
+            {
+                foreach (var s in subs)
+                {
+                    var field = new ScriptFileField();
+                    field.SetTypeName(s.Target);
+                    field.text = $"#{s.TokenId}  {s.Target}.{s.Method}";
+                    _detailSubsSection.Add(field);
+                }
+            }
+        }
+
+        static Label SectionHeader(string text)
+        {
+            var l = new Label(text);
+            l.AddToClassList("mb-detail-section-header");
+            return l;
+        }
+
+        static Label DimNote(string text)
+        {
+            var l = new Label(text);
+            l.AddToClassList("mb-detail-section-note");
+            return l;
         }
 
         // ── Tick (per editor frame) ──────────────────────────────────────
@@ -254,7 +334,7 @@ namespace Tutan.MessageBus.Editor
         {
             if (_logList == null || _paused) return; // UI may not be built yet (OnEnable runs before CreateGUI)
 
-            long total = MessageBusInstrumentation.TotalEver;
+            long total = MessagesInstrumentation.TotalEver;
             if (total == _lastTotalProcessed)
             {
                 UpdateStatus();
@@ -275,10 +355,10 @@ namespace Tutan.MessageBus.Editor
 
         void ProcessIncremental(long totalEver)
         {
-            var snapshot = MessageBusInstrumentation.Snapshot();
+            var snapshot = MessagesInstrumentation.Snapshot();
             int currentCount = snapshot.Count;
             
-            int capacity = MessageBusInstrumentation.Capacity;
+            int capacity = MessagesInstrumentation.Capacity;
             int newCount = (int)Math.Min(currentCount, totalEver - _lastTotalProcessed);
             
             if (newCount <= 0) return;
@@ -300,19 +380,19 @@ namespace Tutan.MessageBus.Editor
             _lastTotalProcessed = totalEver;
         }
 
-        bool PassesFilter(MessageBusInstrumentation.Record r)
+        bool PassesFilter(MessagesInstrumentation.Record r)
         {
-            if (r.Bus == MessageBusInstrumentation.BusKind.Event && !_showEvents) return false;
-            if (r.Bus == MessageBusInstrumentation.BusKind.Command && !_showCommands) return false;
+            if (r.Bus == MessagesInstrumentation.BusKind.Event && !_showEvents) return false;
+            if (r.Bus == MessagesInstrumentation.BusKind.Command && !_showCommands) return false;
 
             switch (r.Op)
             {
-                case MessageBusInstrumentation.Op.Publish:    if (!_showPublish) return false; break;
-                case MessageBusInstrumentation.Op.Enqueue:    if (!_showEnqueue) return false; break;
-                case MessageBusInstrumentation.Op.Subscribe:
-                case MessageBusInstrumentation.Op.Unsubscribe: if (!_showSubs) return false; break;
-                case MessageBusInstrumentation.Op.DrainStart:
-                case MessageBusInstrumentation.Op.DrainEnd:   if (!_showDrains) return false; break;
+                case MessagesInstrumentation.Op.Publish:    if (!_showPublish) return false; break;
+                case MessagesInstrumentation.Op.Enqueue:    if (!_showEnqueue) return false; break;
+                case MessagesInstrumentation.Op.Subscribe:
+                case MessagesInstrumentation.Op.Unsubscribe: if (!_showSubs) return false; break;
+                case MessagesInstrumentation.Op.DrainStart:
+                case MessagesInstrumentation.Op.DrainEnd:   if (!_showDrains) return false; break;
             }
 
             if (!string.IsNullOrEmpty(_search))
@@ -326,61 +406,22 @@ namespace Tutan.MessageBus.Editor
         void UpdateStatus()
         {
             if (_statusLabel == null) return;
-            _statusLabel.text = $"{_filtered.Count} visible · {MessageBusInstrumentation.Count} total records";
+            _statusLabel.text = $"{_filtered.Count} visible · {MessagesInstrumentation.Count} total records";
         }
 
         // ── Payload formatting ───────────────────────────────────────────
-        static string FormatRecord(MessageBusInstrumentation.Record r)
+        // Body shows only the token/handler for subscription records; the op
+        // and bus live in the header, the payload in its own section.
+        static string FormatRecord(MessagesInstrumentation.Record r)
         {
             var sb = new StringBuilder();
-            sb.Append("Op:     ").Append(r.Op).Append('\n');
-            sb.Append("Bus:    ").Append(r.Bus).Append('\n');
-            sb.Append("Type:   ").Append(r.MessageType?.FullName ?? "-").Append('\n');
-            sb.Append("Frame:  ").Append(r.Frame).Append('\n');
-            sb.Append("Thread: ").Append(r.ThreadId).Append('\n');
-            sb.Append("Time:   ").Append(new DateTime(r.TimestampTicks, DateTimeKind.Utc).ToLocalTime().ToString("HH:mm:ss.fffffff")).Append('\n');
-            if (r.TokenId != 0) sb.Append("Token:  #").Append(r.TokenId).Append('\n');
+            if (r.TokenId != 0) sb.Append("Token:   #").Append(r.TokenId);
             if (r.HandlerTarget != null || r.HandlerMethod != null)
-                sb.Append("Handler:").Append(r.HandlerTarget).Append('.').Append(r.HandlerMethod).Append('\n');
-
-            sb.Append('\n');
-            if (r.PayloadBox != null)
             {
-                sb.Append("Payload:\n");
-                FormatPayload(sb, r.PayloadBox);
+                if (sb.Length > 0) sb.Append('\n');
+                sb.Append("Handler: ").Append(r.HandlerTarget).Append('.').Append(r.HandlerMethod);
             }
-            else if (r.Op == MessageBusInstrumentation.Op.Publish || r.Op == MessageBusInstrumentation.Op.Enqueue)
-            {
-                sb.Append("Payload: (capture disabled — toggle \"Capture payloads\" to inspect)\n");
-            }
-
-            if (r.MessageType != null && (r.Op == MessageBusInstrumentation.Op.Publish || r.Op == MessageBusInstrumentation.Op.Enqueue))
-            {
-                sb.Append("\nSubscribers (at ").Append(r.Op == MessageBusInstrumentation.Op.Publish ? "publish" : "enqueue").Append(" time):\n");
-                AppendSubscribers(sb, r.Subscribers);
-            }
-
             return sb.ToString();
-        }
-
-        // Renders the snapshot frozen into the record at fire time — not the live
-        // bus — so the list reflects who was subscribed when the message went out.
-        static void AppendSubscribers(StringBuilder sb, MessageBusInstrumentation.Subscriber[] subscribers)
-        {
-            if (subscribers == null)
-            {
-                sb.Append("  (not captured)\n");
-                return;
-            }
-
-            if (subscribers.Length == 0)
-            {
-                sb.Append("  (none)\n");
-                return;
-            }
-
-            foreach (var s in subscribers)
-                sb.Append("  #").Append(s.TokenId).Append(' ').Append(s.Target).Append('.').Append(s.Method).Append('\n');
         }
 
         static void FormatPayload(StringBuilder sb, object payload)

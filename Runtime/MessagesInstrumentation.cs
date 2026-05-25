@@ -1,8 +1,8 @@
 // ============================================================================
-// MessageBusInstrumentation.cs — Optional pub/sub observation layer
+// MessagesInstrumentation.cs — Optional pub/sub observation layer
 //
 // All Record* methods are decorated with [Conditional("UNITY_EDITOR"),
-// Conditional("TUTAN_MESSAGEBUS_DEBUG")] so the C# compiler strips every
+// Conditional("TUTAN_MESSAGES_DEBUG")] so the C# compiler strips every
 // call site in release player builds. When the call sites are compiled in,
 // they short-circuit on `!Enabled` so the steady-state cost is one branch.
 //
@@ -15,9 +15,9 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading;
 
-namespace Tutan.MessageBus
+namespace Tutan.Messages
 {
-    public static class MessageBusInstrumentation
+    public static class MessagesInstrumentation
     {
         public enum BusKind : byte
         {
@@ -103,7 +103,7 @@ namespace Tutan.MessageBus
         /// <summary>When true, <see cref="Op.DrainStart"/> / <see cref="Op.DrainEnd"/> are appended to the buffer. Off by default — drains fire every frame and would flood the ring buffer.</summary>
         public static bool RecordDrains;
 
-        // Frame counter — updated by MessageBusHost from main thread so worker
+        // Frame counter — updated by MessagesHost from main thread so worker
         // threads can read it without touching UnityEngine.Time.
         internal static int CurrentFrame;
 
@@ -115,7 +115,7 @@ namespace Tutan.MessageBus
         /// member the host touches, so stripping it means the type is never
         /// initialized in release and the ring buffer below is never allocated.
         /// </summary>
-        [Conditional("UNITY_EDITOR"), Conditional("TUTAN_MESSAGEBUS_DEBUG")]
+        [Conditional("UNITY_EDITOR"), Conditional("TUTAN_MESSAGES_DEBUG")]
         public static void SyncFrame(int frame) => CurrentFrame = frame;
 
         const int DefaultCapacity = 4096;
@@ -165,7 +165,7 @@ namespace Tutan.MessageBus
         // ── Internal Record* hooks ───────────────────────────────────────
         // [Conditional] strips these at the call site in release builds.
 
-        [Conditional("UNITY_EDITOR"), Conditional("TUTAN_MESSAGEBUS_DEBUG")]
+        [Conditional("UNITY_EDITOR"), Conditional("TUTAN_MESSAGES_DEBUG")]
         internal static void RecordPublish<T>(BusKind bus, ref T message, ChannelBase channel) where T : unmanaged, IMessage
         {
             if (!Enabled) return;
@@ -175,7 +175,7 @@ namespace Tutan.MessageBus
                 bus, Op.Publish, typeof(T), 0, payload, null, null, CaptureSubscribers(channel)));
         }
 
-        [Conditional("UNITY_EDITOR"), Conditional("TUTAN_MESSAGEBUS_DEBUG")]
+        [Conditional("UNITY_EDITOR"), Conditional("TUTAN_MESSAGES_DEBUG")]
         internal static void RecordEnqueue<T>(BusKind bus, in T message, ChannelBase channel) where T : unmanaged, IMessage
         {
             if (!Enabled) return;
@@ -215,7 +215,7 @@ namespace Tutan.MessageBus
             }
         }
 
-        [Conditional("UNITY_EDITOR"), Conditional("TUTAN_MESSAGEBUS_DEBUG")]
+        [Conditional("UNITY_EDITOR"), Conditional("TUTAN_MESSAGES_DEBUG")]
         internal static void RecordSubscribe(BusKind bus, Type messageType, int tokenId, Delegate handler)
         {
             if (!Enabled) return;
@@ -226,7 +226,7 @@ namespace Tutan.MessageBus
                 bus, Op.Subscribe, messageType, tokenId, null, target, method, null));
         }
 
-        [Conditional("UNITY_EDITOR"), Conditional("TUTAN_MESSAGEBUS_DEBUG")]
+        [Conditional("UNITY_EDITOR"), Conditional("TUTAN_MESSAGES_DEBUG")]
         internal static void RecordUnsubscribe(BusKind bus, Type messageType, int tokenId)
         {
             if (!Enabled) return;
@@ -235,7 +235,7 @@ namespace Tutan.MessageBus
                 bus, Op.Unsubscribe, messageType, tokenId, null, null, null, null));
         }
 
-        [Conditional("UNITY_EDITOR"), Conditional("TUTAN_MESSAGEBUS_DEBUG")]
+        [Conditional("UNITY_EDITOR"), Conditional("TUTAN_MESSAGES_DEBUG")]
         internal static void RecordDrain(BusKind bus, bool start)
         {
             if (!Enabled || !RecordDrains) return;

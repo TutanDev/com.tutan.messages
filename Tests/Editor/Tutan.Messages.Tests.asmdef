@@ -1,10 +1,10 @@
 {
-    "name": "Tutan.MessageBus.Tests",
-    "rootNamespace": "Tutan.MessageBus.Tests",
+    "name": "Tutan.Messages.Tests",
+    "rootNamespace": "Tutan.Messages.Tests",
     "references": [
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner",
-        "Tutan.MessageBus"
+        "Tutan.Messages"
     ],
     "includePlatforms": [
         "Editor"

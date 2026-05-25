@@ -1,7 +1,7 @@
 using System;
 using UnityEngine;
 
-namespace Tutan.MessageBus
+namespace Tutan.Messages
 {
     /// <summary>
     /// Static bus for <see cref="ICommand"/> messages.
@@ -10,9 +10,9 @@ namespace Tutan.MessageBus
     /// </summary>
     public static class CommandBus
     {
-        static MessageBus<ICommand> s_bus = new MessageBus<ICommand>(MessageBusInstrumentation.BusKind.Command);
+        static MessageBuse<ICommand> s_bus = new MessageBuse<ICommand>(MessagesInstrumentation.BusKind.Command);
 
-        internal static MessageBus<ICommand> Bus => s_bus;
+        internal static MessageBuse<ICommand> Bus => s_bus;
 
         /// <summary>
         /// Subscribe to a command. Throws <see cref="InvalidOperationException"/>
@@ -42,7 +42,7 @@ namespace Tutan.MessageBus
         public static void Enqueue<T>(in T message) where T : unmanaged, ICommand
             => s_bus.Enqueue(in message);
 
-        /// <summary>Process all queued commands. Call once per frame from MessageBusHost or a PlayerLoop callback.</summary>
+        /// <summary>Process all queued commands. Call once per frame from MessagesHost or a PlayerLoop callback.</summary>
         public static void DrainQueues() => s_bus.DrainQueues();
 
         /// <summary>Number of active subscriptions for message type T.</summary>
@@ -55,7 +55,7 @@ namespace Tutan.MessageBus
         /// Clear all subscriptions and queued messages.
         /// Call during test teardown or scene transitions.
         /// </summary>
-        public static void Reset() { s_bus.Dispose(); s_bus = new MessageBus<ICommand>(MessageBusInstrumentation.BusKind.Command); }
+        public static void Reset() { s_bus.Dispose(); s_bus = new MessageBuse<ICommand>(MessagesInstrumentation.BusKind.Command); }
 
         // Wipe static state on every Enter Play Mode so the bus stays clean
         // when the user has disabled Domain Reload (Project Settings →

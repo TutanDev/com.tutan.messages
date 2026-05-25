@@ -29,12 +29,12 @@ hot-path workloads where a single GC spike means a dropped frame.
 
 | | Guide | What it covers |
 |---|---|---|
-| 📖 | [Why this library](MessageBus) | The problem, the approach, message and handler basics |
+| 📖 | [Why this library](Messages) | The problem, the approach, message and handler basics |
 | 📋 | [API Reference](API-Reference) | Every public member — signature and one-line description |
 | 🧪 | [Examples](Examples) | Basic pub/sub, queued worker dispatch, commands, scene cleanup |
 | 🧵 | [Threading](Threading) | Which calls are main-thread-only, which are thread-safe, and why |
 | ⚡ | [Performance](Performance) | Cost table, allocation contract, pre-warming recipe |
 | ⚠️ | [Edge Cases](EdgeCases) | Reentrant publish, subscribe/unsubscribe during dispatch, exceptions |
 | 🏛️ | [Architecture](Architecture) | When to reach for the bus and when not to |
-| 🚀 | [Bootstrap](Bootstrap) | `MessageBusHost`, opting out of auto-bootstrap |
+| 🚀 | [Bootstrap](Bootstrap) | `MessagesHost`, opting out of auto-bootstrap |
 | 🛠️ | [Editor Tooling](Editor) | Messages Console window and inspector-serializable references |

@@ -1,4 +1,4 @@
-# MessageBus — Zero-Alloc Pub/Sub for Unity
+# Messages — Zero-Alloc Pub/Sub for Unity
 
 A struct-based, ref-passed, GC-free message bus designed for Unity 6 and XR
 frame budgets. Drop it in, publish events, never allocate.
@@ -7,13 +7,13 @@ frame budgets. Drop it in, publish events, never allocate.
 
 Unity's built-in messaging options (`UnityEvent`, C# `event`, `SendMessage`,
 `ScriptableObject` events) all allocate, copy, or reflect in the hot path. On
-a 90 Hz XR headset, a single GC spike drops a frame. **MessageBus dispatches
+a 90 Hz XR headset, a single GC spike drops a frame. **Messages dispatches
 zero-allocation by design.**
 
 ## Quick start
 
 ```csharp
-using Tutan.MessageBus;
+using Tutan.Messages;
 
 // 1. Define a message — must be unmanaged struct
 public struct PlayerScored : IEvent
@@ -48,7 +48,7 @@ prefab to drag into your scene.
   `-=` bugs with closures.
 - **Profiler markers** on every entry point. Visible in Unity Profiler timeline.
 - **Auto-bootstrap** via `RuntimeInitializeOnLoad`. Opt out with the
-  `TUTAN_MESSAGEBUS_DISABLE_AUTOBOOTSTRAP` scripting define if you prefer
+  `TUTAN_MESSAGES_DISABLE_AUTOBOOTSTRAP` scripting define if you prefer
   manual control.
 - **Unity 6.0 (6000.1) and newer.** Works on Windows, Mac, Linux, iOS,
   Android, WebGL, all XR platforms (Quest, PCVR, visionOS).

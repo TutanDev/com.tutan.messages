@@ -1,11 +1,11 @@
-[Home](index) · [Why](MessageBus) · **API Reference** · [Examples](Examples) · [Threading](Threading) · [Performance](Performance) · [Edge Cases](EdgeCases) · [Architecture](Architecture) · [Bootstrap](Bootstrap) · [Editor](Editor)
+[Home](index) · [Why](Messages) · **API Reference** · [Examples](Examples) · [Threading](Threading) · [Performance](Performance) · [Edge Cases](EdgeCases) · [Architecture](Architecture) · [Bootstrap](Bootstrap) · [Editor](Editor)
 
 ---
 
 # API Reference
 
 All methods are exposed on the static `EventBus` and `CommandBus` types (and
-on the underlying `MessageBus` instance they wrap). Signatures are identical
+on the underlying `Messages` instance they wrap). Signatures are identical
 across both buses; the only behavioural difference is that `CommandBus`
 enforces a single subscriber per message type.
 
@@ -62,7 +62,7 @@ void DrainQueues()
 ```
 
 Processes all pending queued messages across all channels. Call once per
-frame. Main thread only. By default `MessageBusHost` does this for you — see
+frame. Main thread only. By default `MessagesHost` does this for you — see
 [Bootstrap](Bootstrap).
 
 ## Diagnostics

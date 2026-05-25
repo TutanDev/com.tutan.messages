@@ -1,6 +1,6 @@
-using Tutan.MessageBus;
+using Tutan.Messages;
 
-namespace Tutan.MessageBus.Samples.XRHandGesture
+namespace Tutan.Messages.Samples.XRHandGesture
 {
     public struct HandGesture : IEvent
     {

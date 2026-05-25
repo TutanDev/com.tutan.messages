@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace Tutan.MessageBus.Samples.BasicPubSub
+namespace Tutan.Messages.Samples.BasicPubSub
 {
     // ── Publisher ────────────────────────────────────────────────────────
 

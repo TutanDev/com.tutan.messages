@@ -1,5 +1,5 @@
 // ============================================================================
-// MessageBus.cs — Zero-allocation Pub/Sub for Unity 6 / XR
+// Messages.cs — Zero-allocation Pub/Sub for Unity 6 / XR
 //
 // Supports:
 //   - Immediate (synchronous) dispatch within current frame
@@ -15,7 +15,7 @@ using System.Runtime.CompilerServices;
 using Unity.Profiling;
 using UnityEngine;
 
-namespace Tutan.MessageBus
+namespace Tutan.Messages
 {
     /// <summary>
     /// Handler delegate. Ref parameter avoids struct copy on dispatch.
@@ -156,11 +156,11 @@ namespace Tutan.MessageBus
             Entries.RemoveAll(static e => !e.Active);
             _dirtyCount = 0;
             Debug.Assert(_activeCount == Entries.Count,
-                "MessageBus: _activeCount desynced after compaction.");
+                "Messages: _activeCount desynced after compaction.");
         }
     }
 
-    // ── MessageBus<TBase> ────────────────────────────────────────────────
+    // ── Messages<TBase> ────────────────────────────────────────────────
 
     /// <summary>
     /// Generic message bus parameterized by message base type (ICommand or IEvent).
@@ -171,7 +171,7 @@ namespace Tutan.MessageBus
     /// main-thread call: channel creation goes through a ConcurrentDictionary,
     /// and the message lands in a per-channel ConcurrentQueue.
     /// </summary>
-    public class MessageBus<TBase> : IDisposable where TBase : IMessage
+    public class MessageBuse<TBase> : IDisposable where TBase : IMessage
     {
         // ConcurrentDictionary so worker-thread Enqueue can race safely with
         // main-thread Subscribe/Publish/DrainQueues. Lookups are lock-free;
@@ -183,14 +183,14 @@ namespace Tutan.MessageBus
 
         // Used by the optional instrumentation layer to tag records as
         // originating from the Event or Command bus.
-        readonly MessageBusInstrumentation.BusKind _instrumentationKind;
+        readonly MessagesInstrumentation.BusKind _instrumentationKind;
 
-        static readonly ProfilerMarker s_publishMarker = new("MessageBus.Publish");
-        static readonly ProfilerMarker s_drainMarker = new("MessageBus.DrainQueues");
+        static readonly ProfilerMarker s_publishMarker = new("Messages.Publish");
+        static readonly ProfilerMarker s_drainMarker = new("Messages.DrainQueues");
 
-        public MessageBus() : this(MessageBusInstrumentation.BusKind.Event) { }
+        public MessageBuse() : this(MessagesInstrumentation.BusKind.Event) { }
 
-        internal MessageBus(MessageBusInstrumentation.BusKind kind)
+        internal MessageBuse(MessagesInstrumentation.BusKind kind)
         {
             _instrumentationKind = kind;
         }
@@ -208,7 +208,7 @@ namespace Tutan.MessageBus
             Debug.Assert(tokenId != 0, "SubscriptionToken ID wrapped to invalid sentinel.");
             channel.AddEntry(tokenId, handler);
 
-            MessageBusInstrumentation.RecordSubscribe(_instrumentationKind, typeof(T), tokenId, handler);
+            MessagesInstrumentation.RecordSubscribe(_instrumentationKind, typeof(T), tokenId, handler);
 
             return new SubscriptionToken(tokenId, typeof(T));
         }
@@ -224,7 +224,7 @@ namespace Tutan.MessageBus
 
             bool removed = channelBase.RemoveEntry(token.Id);
             if (removed)
-                MessageBusInstrumentation.RecordUnsubscribe(_instrumentationKind, token.MessageType, token.Id);
+                MessagesInstrumentation.RecordUnsubscribe(_instrumentationKind, token.MessageType, token.Id);
             return removed;
         }
 
@@ -238,7 +238,7 @@ namespace Tutan.MessageBus
             // subscribers as they are at this instant. channelBase is null when
             // nothing has ever subscribed — the publish is still recorded.
             _channels.TryGetValue(typeof(T), out var channelBase);
-            MessageBusInstrumentation.RecordPublish(_instrumentationKind, ref message, channelBase);
+            MessagesInstrumentation.RecordPublish(_instrumentationKind, ref message, channelBase);
 
             if (channelBase == null) return;
 
@@ -262,7 +262,7 @@ namespace Tutan.MessageBus
         public void Enqueue<T>(in T message) where T : unmanaged, TBase
         {
             var channel = GetOrCreateChannel<T>();
-            MessageBusInstrumentation.RecordEnqueue(_instrumentationKind, in message, channel);
+            MessagesInstrumentation.RecordEnqueue(_instrumentationKind, in message, channel);
             channel.Enqueue(message);
         }
 
@@ -274,12 +274,12 @@ namespace Tutan.MessageBus
         {
             using var _ = s_drainMarker.Auto();
 
-            MessageBusInstrumentation.RecordDrain(_instrumentationKind, start: true);
+            MessagesInstrumentation.RecordDrain(_instrumentationKind, start: true);
             foreach (var kvp in _channels)
             {
                 kvp.Value.DrainQueue();
             }
-            MessageBusInstrumentation.RecordDrain(_instrumentationKind, start: false);
+            MessagesInstrumentation.RecordDrain(_instrumentationKind, start: false);
         }
 
         public int GetSubscriberCount<T>() where T : unmanaged, TBase

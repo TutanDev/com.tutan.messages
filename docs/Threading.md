@@ -1,4 +1,4 @@
-[Home](index) · [Why](MessageBus) · [API Reference](API-Reference) · [Examples](Examples) · **Threading** · [Performance](Performance) · [Edge Cases](EdgeCases) · [Architecture](Architecture) · [Bootstrap](Bootstrap) · [Editor](Editor)
+[Home](index) · [Why](Messages) · [API Reference](API-Reference) · [Examples](Examples) · **Threading** · [Performance](Performance) · [Edge Cases](EdgeCases) · [Architecture](Architecture) · [Bootstrap](Bootstrap) · [Editor](Editor)
 
 ---
 
@@ -33,4 +33,4 @@
 If you need to react to a worker-thread event on the main thread, the rule is
 simple: **`Enqueue` from the worker, subscribe normally on the main thread,
 and the handler will run inside the next `DrainQueues()` call** — which the
-default `MessageBusHost` triggers in `LateUpdate`. See [Bootstrap](Bootstrap).
+default `MessagesHost` triggers in `LateUpdate`. See [Bootstrap](Bootstrap).

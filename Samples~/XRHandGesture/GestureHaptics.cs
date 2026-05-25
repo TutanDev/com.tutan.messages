@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace Tutan.MessageBus.Samples.XRHandGesture
+namespace Tutan.Messages.Samples.XRHandGesture
 {
     /// <summary>Subscriber 3: triggers haptic feedback above a confidence threshold.</summary>
     public sealed class GestureHaptics : MonoBehaviour

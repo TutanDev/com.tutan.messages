@@ -1,6 +1,6 @@
-using Tutan.MessageBus;
+using Tutan.Messages;
 
-namespace Tutan.MessageBus.Samples.BasicPubSub
+namespace Tutan.Messages.Samples.BasicPubSub
 {
     public struct PlayerScored : IEvent
     {

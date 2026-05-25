@@ -1,6 +1,6 @@
 # Basic Pub/Sub Sample
 
-The smallest possible introduction to `Tutan.MessageBus`.
+The smallest possible introduction to `Tutan.Messages`.
 
 1. Create an empty GameObject in your scene.
 2. Add the `ScoreBoard` component to it.

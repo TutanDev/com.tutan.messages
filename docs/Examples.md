@@ -1,4 +1,4 @@
-[Home](index) · [Why](MessageBus) · [API Reference](API-Reference) · **Examples** · [Threading](Threading) · [Performance](Performance) · [Edge Cases](EdgeCases) · [Architecture](Architecture) · [Bootstrap](Bootstrap) · [Editor](Editor)
+[Home](index) · [Why](Messages) · [API Reference](API-Reference) · **Examples** · [Threading](Threading) · [Performance](Performance) · [Edge Cases](EdgeCases) · [Architecture](Architecture) · [Bootstrap](Bootstrap) · [Editor](Editor)
 
 ---
 
@@ -7,7 +7,7 @@
 ## Basic Publish / Subscribe
 
 ```csharp
-using Tutan.MessageBus;
+using Tutan.Messages;
 using UnityEngine;
 
 // ── Define an event ──────────────────────────────────────────────

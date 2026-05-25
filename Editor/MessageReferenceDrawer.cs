@@ -6,23 +6,29 @@ using UnityEditor.UIElements;
 using UnityEngine;
 using UnityEngine.UIElements;
 
-namespace Tutan.MessageBus.Editor
+namespace Tutan.Messages.Editor
 {
-    [CustomPropertyDrawer(typeof(MessageTypeAttribute))]
+    [CustomPropertyDrawer(typeof(EventTypeAttribute))]
+    [CustomPropertyDrawer(typeof(CommandTypeAttribute))]
     public class MessageTypeDrawer : PropertyDrawer
     {
         public override VisualElement CreatePropertyGUI(SerializedProperty property)
         {
-            var attr = (MessageTypeAttribute)attribute;
+            var baseType = attribute switch
+            {
+                EventTypeAttribute e => e.BaseType,
+                CommandTypeAttribute c => c.BaseType,
+                _ => typeof(IMessage)
+            };
             var container = new VisualElement();
 
             if (property.propertyType != SerializedPropertyType.String)
             {
-                container.Add(new Label("MessageTypeAttribute only works on string fields."));
+                container.Add(new Label($"[{attribute.GetType().Name}] only works on string fields."));
                 return container;
             }
 
-            var types = TypeCache.GetTypesDerivedFrom(attr.BaseType)
+            var types = TypeCache.GetTypesDerivedFrom(baseType)
                 .Where(t => !t.IsAbstract && !t.IsInterface)
                 .OrderBy(t => t.Name)
                 .ToList();

@@ -11,8 +11,6 @@
         </uie:Toolbar>
 
         <uie:Toolbar name="toolbar-filters" class="mb-toolbar">
-            <uie:ToolbarToggle name="payloads-toggle" text="Capture payloads" tooltip="Box message structs into records so payload fields can be inspected. Allocates per Publish/Enqueue." />
-            <ui:VisualElement class="mb-spacer-sm" />
             <uie:ToolbarToggle name="events-toggle" text="Events" />
             <uie:ToolbarToggle name="commands-toggle" text="Commands" />
             <ui:VisualElement class="mb-spacer-sm" />
@@ -33,6 +31,9 @@
                         <ui:Label name="detail-header" text="Select a row to inspect" class="mb-detail-header" />
                         <ui:ScrollView>
                             <ui:Label name="detail-body" class="mb-detail-body" />
+                            <ui:VisualElement name="detail-type-section" class="mb-detail-section" />
+                            <ui:VisualElement name="detail-payload-section" class="mb-detail-section" />
+                            <ui:VisualElement name="detail-subs-section" class="mb-detail-section" />
                         </ui:ScrollView>
                     </ui:VisualElement>
                 </ui:TwoPaneSplitView>

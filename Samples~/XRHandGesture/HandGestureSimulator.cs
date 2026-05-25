@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace Tutan.MessageBus.Samples.XRHandGesture
+namespace Tutan.Messages.Samples.XRHandGesture
 {
     /// <summary>
     /// Publishes synthetic hand gestures on a timer. In a real XR app this

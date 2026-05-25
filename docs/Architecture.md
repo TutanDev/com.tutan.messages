@@ -1,4 +1,4 @@
-[Home](index) · [Why](MessageBus) · [API Reference](API-Reference) · [Examples](Examples) · [Threading](Threading) · [Performance](Performance) · [Edge Cases](EdgeCases) · **Architecture** · [Bootstrap](Bootstrap) · [Editor](Editor)
+[Home](index) · [Why](Messages) · [API Reference](API-Reference) · [Examples](Examples) · [Threading](Threading) · [Performance](Performance) · [Edge Cases](EdgeCases) · **Architecture** · [Bootstrap](Bootstrap) · [Editor](Editor)
 
 ---
 

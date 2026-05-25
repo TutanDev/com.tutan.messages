@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace Tutan.MessageBus.Samples.XRHandGesture
+namespace Tutan.Messages.Samples.XRHandGesture
 {
     /// <summary>Subscriber 1: triggers UI actions on Pinch.</summary>
     public sealed class GestureMenu : MonoBehaviour

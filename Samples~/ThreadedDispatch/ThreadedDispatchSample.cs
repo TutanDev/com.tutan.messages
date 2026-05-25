@@ -1,13 +1,13 @@
 using System.Threading;
 using System.Threading.Tasks;
-using Tutan.MessageBus;
+using Tutan.Messages;
 using UnityEngine;
 
-namespace Tutan.MessageBus.Samples.ThreadedDispatch
+namespace Tutan.Messages.Samples.ThreadedDispatch
 {
     /// <summary>
     /// Demonstrates publishing from a worker thread via Enqueue. The bus drains
-    /// queued messages on the main thread in LateUpdate (via MessageBusHost),
+    /// queued messages on the main thread in LateUpdate (via MessagesHost),
     /// so the handler is guaranteed to run on the main thread — safe to touch
     /// Unity APIs.
     /// </summary>

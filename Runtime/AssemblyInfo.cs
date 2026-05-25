@@ -1,4 +1,4 @@
 using System.Runtime.CompilerServices;
 
-[assembly: InternalsVisibleTo("Tutan.MessageBus.Tests")]
-[assembly: InternalsVisibleTo("Tutan.MessageBus.Editor")]
+[assembly: InternalsVisibleTo("Tutan.Messages.Tests")]
+[assembly: InternalsVisibleTo("Tutan.Messages.Editor")]

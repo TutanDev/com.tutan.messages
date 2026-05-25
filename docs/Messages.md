@@ -2,9 +2,9 @@
 
 ---
 
-# MessageBus
+# Messages
 
-**Namespace:** `Tutan.MessageBus`
+**Namespace:** `Tutan.Messages`
 **Target:** Unity 2021.3 LTS and newer (Unity 6 / CoreCLR friendly), XR applications
 
 ## Why a Message Bus
@@ -24,7 +24,7 @@ XR-sensitive code paths**:
 | `SendMessage()`    | Reflection-based, string-keyed, zero type safety             |
 | `ScriptableObject` | Requires asset creation, inspector coupling, not struct-safe |
 
-`Tutan.MessageBus` is built to avoid every one of these costs in the dispatch
+`Tutan.Messages` is built to avoid every one of these costs in the dispatch
 hot path.
 
 ### XR-specific design constraints
@@ -112,7 +112,7 @@ delegate instances and silently fail to unsubscribe).
 | Queued    | `Enqueue` | Thread-safe   | Network callbacks, async tasks, worker threads |
 
 Queued messages are dispatched on the main thread when `DrainQueues()` is
-called. The bundled `MessageBusHost` calls this in `LateUpdate` and is
+called. The bundled `MessagesHost` calls this in `LateUpdate` and is
 auto-instantiated at startup — see [Bootstrap](Bootstrap).
 
 ---

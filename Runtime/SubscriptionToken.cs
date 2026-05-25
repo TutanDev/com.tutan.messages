@@ -1,6 +1,6 @@
 using System;
 
-namespace Tutan.MessageBus
+namespace Tutan.Messages
 {
     /// <summary>
     /// Opaque handle returned on Subscribe. Used for deterministic unsubscription.

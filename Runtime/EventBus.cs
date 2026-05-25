@@ -1,15 +1,15 @@
 using UnityEngine;
 
-namespace Tutan.MessageBus
+namespace Tutan.Messages
 {
     /// <summary>
     /// Static bus for <see cref="IEvent"/> messages. Supports any number of handlers per event type (fan-out).
     /// </summary>
     public static class EventBus
     {
-        static MessageBus<IEvent> s_bus = new MessageBus<IEvent>(MessageBusInstrumentation.BusKind.Event);
+        static MessageBuse<IEvent> s_bus = new MessageBuse<IEvent>(MessagesInstrumentation.BusKind.Event);
 
-        internal static MessageBus<IEvent> Bus => s_bus;
+        internal static MessageBuse<IEvent> Bus => s_bus;
 
         /// <summary>Register a handler for event type T. Returns a token for unsubscription.</summary>
         public static SubscriptionToken Subscribe<T>(MessageHandler<T> handler) where T : unmanaged, IEvent
@@ -30,7 +30,7 @@ namespace Tutan.MessageBus
         public static void Enqueue<T>(in T message) where T : unmanaged, IEvent
             => s_bus.Enqueue(in message);
 
-        /// <summary>Process all queued events. Call once per frame from MessageBusHost or a PlayerLoop callback.</summary>
+        /// <summary>Process all queued events. Call once per frame from MessagesHost or a PlayerLoop callback.</summary>
         public static void DrainQueues() => s_bus.DrainQueues();
 
         /// <summary>Number of active subscriptions for message type T.</summary>
@@ -43,7 +43,7 @@ namespace Tutan.MessageBus
         /// Clear all subscriptions and queued messages.
         /// Call during test teardown or scene transitions.
         /// </summary>
-        public static void Reset() { s_bus.Dispose(); s_bus = new MessageBus<IEvent>(MessageBusInstrumentation.BusKind.Event); }
+        public static void Reset() { s_bus.Dispose(); s_bus = new MessageBuse<IEvent>(MessagesInstrumentation.BusKind.Event); }
 
         // Wipe static state on every Enter Play Mode so the bus stays clean
         // when the user has disabled Domain Reload (Project Settings →

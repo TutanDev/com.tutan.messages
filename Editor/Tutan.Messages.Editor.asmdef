@@ -1,8 +1,8 @@
 {
-    "name": "Tutan.MessageBus.Editor",
-    "rootNamespace": "Tutan.MessageBus.Editor",
+    "name": "Tutan.Messages.Editor",
+    "rootNamespace": "Tutan.Messages.Editor",
     "references": [
-        "Tutan.MessageBus"
+        "Tutan.Messages"
     ],
     "includePlatforms": [
         "Editor"

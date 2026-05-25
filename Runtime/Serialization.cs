@@ -2,17 +2,28 @@ using System;
 using System.Linq;
 using UnityEngine;
 
-namespace Tutan.MessageBus
+namespace Tutan.Messages
 {
     /// <summary>
-    /// Attribute to show a type selection dropdown in the inspector.
-    /// Works on string fields (storing AssemblyQualifiedName) or MessageReference fields.
+    /// Decorate a <c>string</c> field to show a dropdown of all concrete
+    /// <see cref="IEvent"/> types in the inspector. The field stores the selected
+    /// type's <c>AssemblyQualifiedName</c>; resolve it with <c>Type.GetType(field)</c>.
     /// </summary>
     [AttributeUsage(AttributeTargets.Field)]
-    public class MessageTypeAttribute : PropertyAttribute
+    public class EventTypeAttribute : PropertyAttribute
     {
-        public Type BaseType { get; }
-        public MessageTypeAttribute(Type baseType = null) => BaseType = baseType ?? typeof(IMessage);
+        public Type BaseType => typeof(IEvent);
+    }
+
+    /// <summary>
+    /// Decorate a <c>string</c> field to show a dropdown of all concrete
+    /// <see cref="ICommand"/> types in the inspector. The field stores the selected
+    /// type's <c>AssemblyQualifiedName</c>; resolve it with <c>Type.GetType(field)</c>.
+    /// </summary>
+    [AttributeUsage(AttributeTargets.Field)]
+    public class CommandTypeAttribute : PropertyAttribute
+    {
+        public Type BaseType => typeof(ICommand);
     }
 
     /// <summary>

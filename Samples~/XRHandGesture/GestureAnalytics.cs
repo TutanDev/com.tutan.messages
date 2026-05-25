@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace Tutan.MessageBus.Samples.XRHandGesture
+namespace Tutan.Messages.Samples.XRHandGesture
 {
     /// <summary>Subscriber 2: records analytics for every gesture.</summary>
     public sealed class GestureAnalytics : MonoBehaviour

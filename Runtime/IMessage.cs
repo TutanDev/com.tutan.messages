@@ -1,4 +1,4 @@
-namespace Tutan.MessageBus
+namespace Tutan.Messages
 {
     /// <summary>
     /// Marker interface for all message structs. Constrained to unmanaged at

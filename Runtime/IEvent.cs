@@ -1,4 +1,4 @@
-namespace Tutan.MessageBus
+namespace Tutan.Messages
 {
     /// <summary>
     /// Marker for event messages. Notification — any number of handlers.

@@ -2,11 +2,11 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using NUnit.Framework;
-using Tutan.MessageBus;
+using Tutan.Messages;
 
-namespace Tutan.MessageBus.Tests
+namespace Tutan.Messages.Tests
 {
-    public class MessageBusInstrumentationTests
+    public class MessagesInstrumentationTests
     {
         struct Ping : IEvent { public int Value; }
         struct DoThing : ICommand { public int Value; }
@@ -16,17 +16,17 @@ namespace Tutan.MessageBus.Tests
         {
             EventBus.Reset();
             CommandBus.Reset();
-            MessageBusInstrumentation.Clear();
-            MessageBusInstrumentation.Enabled = true;
-            MessageBusInstrumentation.CapturePayloads = false;
+            MessagesInstrumentation.Clear();
+            MessagesInstrumentation.Enabled = true;
+            MessagesInstrumentation.CapturePayloads = false;
         }
 
         [TearDown]
         public void TearDown()
         {
-            MessageBusInstrumentation.Enabled = false;
-            MessageBusInstrumentation.CapturePayloads = false;
-            MessageBusInstrumentation.Clear();
+            MessagesInstrumentation.Enabled = false;
+            MessagesInstrumentation.CapturePayloads = false;
+            MessagesInstrumentation.Clear();
             EventBus.Reset();
             CommandBus.Reset();
         }
@@ -36,11 +36,11 @@ namespace Tutan.MessageBus.Tests
         {
             var token = EventBus.Subscribe<Ping>((ref Ping p) => { });
 
-            var rec = MessageBusInstrumentation.Snapshot()
-                .Single(r => r.Op == MessageBusInstrumentation.Op.Subscribe && r.MessageType == typeof(Ping));
+            var rec = MessagesInstrumentation.Snapshot()
+                .Single(r => r.Op == MessagesInstrumentation.Op.Subscribe && r.MessageType == typeof(Ping));
 
             Assert.AreEqual(token.Id, rec.TokenId);
-            Assert.AreEqual(MessageBusInstrumentation.BusKind.Event, rec.Bus);
+            Assert.AreEqual(MessagesInstrumentation.BusKind.Event, rec.Bus);
         }
 
         [Test]
@@ -48,13 +48,13 @@ namespace Tutan.MessageBus.Tests
         {
             EventBus.Subscribe<Ping>((ref Ping p) => { });
 
-            MessageBusInstrumentation.CapturePayloads = true;
+            MessagesInstrumentation.CapturePayloads = true;
             EventBus.Publish(new Ping { Value = 11 });
 
-            var rec = MessageBusInstrumentation.Snapshot()
-                .Single(r => r.Op == MessageBusInstrumentation.Op.Publish && r.MessageType == typeof(Ping));
+            var rec = MessagesInstrumentation.Snapshot()
+                .Single(r => r.Op == MessagesInstrumentation.Op.Publish && r.MessageType == typeof(Ping));
 
-            Assert.AreEqual(MessageBusInstrumentation.BusKind.Event, rec.Bus);
+            Assert.AreEqual(MessagesInstrumentation.BusKind.Event, rec.Bus);
             Assert.IsNotNull(rec.PayloadBox);
             Assert.AreEqual(11, ((Ping)rec.PayloadBox).Value);
         }
@@ -65,8 +65,8 @@ namespace Tutan.MessageBus.Tests
             EventBus.Subscribe<Ping>((ref Ping p) => { });
             EventBus.Publish(new Ping { Value = 7 });
 
-            var rec = MessageBusInstrumentation.Snapshot()
-                .Single(r => r.Op == MessageBusInstrumentation.Op.Publish);
+            var rec = MessagesInstrumentation.Snapshot()
+                .Single(r => r.Op == MessagesInstrumentation.Op.Publish);
             Assert.IsNull(rec.PayloadBox);
         }
 
@@ -76,9 +76,9 @@ namespace Tutan.MessageBus.Tests
             CommandBus.Subscribe<DoThing>((ref DoThing m) => { });
             CommandBus.Publish(new DoThing { Value = 1 });
 
-            var publishRec = MessageBusInstrumentation.Snapshot()
-                .Single(r => r.Op == MessageBusInstrumentation.Op.Publish);
-            Assert.AreEqual(MessageBusInstrumentation.BusKind.Command, publishRec.Bus);
+            var publishRec = MessagesInstrumentation.Snapshot()
+                .Single(r => r.Op == MessagesInstrumentation.Op.Publish);
+            Assert.AreEqual(MessagesInstrumentation.BusKind.Command, publishRec.Bus);
         }
 
         [Test]
@@ -86,7 +86,7 @@ namespace Tutan.MessageBus.Tests
         {
             EventBus.Subscribe<Ping>((ref Ping p) => { });
 
-            int countBefore = MessageBusInstrumentation.Snapshot().Count;
+            int countBefore = MessagesInstrumentation.Snapshot().Count;
 
             Task.Run(() =>
             {
@@ -96,9 +96,9 @@ namespace Tutan.MessageBus.Tests
 
             EventBus.DrainQueues();
 
-            var snap = MessageBusInstrumentation.Snapshot();
-            int enq = snap.Count(r => r.Op == MessageBusInstrumentation.Op.Enqueue && r.MessageType == typeof(Ping));
-            int pub = snap.Count(r => r.Op == MessageBusInstrumentation.Op.Publish && r.MessageType == typeof(Ping));
+            var snap = MessagesInstrumentation.Snapshot();
+            int enq = snap.Count(r => r.Op == MessagesInstrumentation.Op.Enqueue && r.MessageType == typeof(Ping));
+            int pub = snap.Count(r => r.Op == MessagesInstrumentation.Op.Publish && r.MessageType == typeof(Ping));
             Assert.AreEqual(50, enq);
             Assert.AreEqual(50, pub);
             Assert.IsTrue(snap.Count > countBefore);
@@ -108,40 +108,40 @@ namespace Tutan.MessageBus.Tests
         public void Unsubscribe_RecordsUnsubscribeOp_OnlyOnSuccess()
         {
             var token = EventBus.Subscribe<Ping>((ref Ping p) => { });
-            MessageBusInstrumentation.Clear();
+            MessagesInstrumentation.Clear();
 
             Assert.IsTrue(EventBus.Unsubscribe(token));
             Assert.IsFalse(EventBus.Unsubscribe(token));
 
-            int count = MessageBusInstrumentation.Snapshot()
-                .Count(r => r.Op == MessageBusInstrumentation.Op.Unsubscribe);
+            int count = MessagesInstrumentation.Snapshot()
+                .Count(r => r.Op == MessagesInstrumentation.Op.Unsubscribe);
             Assert.AreEqual(1, count);
         }
 
         [Test]
         public void Disabled_CapturesNothing()
         {
-            MessageBusInstrumentation.Enabled = false;
+            MessagesInstrumentation.Enabled = false;
             EventBus.Subscribe<Ping>((ref Ping p) => { });
             EventBus.Publish(new Ping { Value = 5 });
 
-            Assert.AreEqual(0, MessageBusInstrumentation.Snapshot().Count);
+            Assert.AreEqual(0, MessagesInstrumentation.Snapshot().Count);
         }
 
         [Test]
         public void RingBuffer_WrapsAroundAtCapacity()
         {
-            MessageBusInstrumentation.SetCapacity(16);
-            MessageBusInstrumentation.Enabled = true;
+            MessagesInstrumentation.SetCapacity(16);
+            MessagesInstrumentation.Enabled = true;
             EventBus.Subscribe<Ping>((ref Ping p) => { });
 
             for (int i = 0; i < 100; i++)
                 EventBus.Publish(new Ping { Value = i });
 
-            Assert.AreEqual(16, MessageBusInstrumentation.Snapshot().Count);
+            Assert.AreEqual(16, MessagesInstrumentation.Snapshot().Count);
 
             // Reset capacity to default for other tests.
-            MessageBusInstrumentation.SetCapacity(4096);
+            MessagesInstrumentation.SetCapacity(4096);
         }
 
         [Test]
@@ -155,8 +155,8 @@ namespace Tutan.MessageBus.Tests
             // Mutate the live bus after the publish was recorded.
             EventBus.Unsubscribe(a);
 
-            var rec = MessageBusInstrumentation.Snapshot()
-                .Single(r => r.Op == MessageBusInstrumentation.Op.Publish && r.MessageType == typeof(Ping));
+            var rec = MessagesInstrumentation.Snapshot()
+                .Single(r => r.Op == MessagesInstrumentation.Op.Publish && r.MessageType == typeof(Ping));
 
             // The snapshot is frozen at publish time: still two subscribers,
             // even though the live bus now has one.
@@ -170,8 +170,8 @@ namespace Tutan.MessageBus.Tests
         {
             EventBus.Publish(new Ping { Value = 1 });
 
-            var rec = MessageBusInstrumentation.Snapshot()
-                .Single(r => r.Op == MessageBusInstrumentation.Op.Publish && r.MessageType == typeof(Ping));
+            var rec = MessagesInstrumentation.Snapshot()
+                .Single(r => r.Op == MessagesInstrumentation.Op.Publish && r.MessageType == typeof(Ping));
 
             Assert.IsNotNull(rec.Subscribers);
             Assert.AreEqual(0, rec.Subscribers.Length);
@@ -184,8 +184,8 @@ namespace Tutan.MessageBus.Tests
 
             EventBus.Enqueue(new Ping { Value = 1 });
 
-            var rec = MessageBusInstrumentation.Snapshot()
-                .Single(r => r.Op == MessageBusInstrumentation.Op.Enqueue && r.MessageType == typeof(Ping));
+            var rec = MessagesInstrumentation.Snapshot()
+                .Single(r => r.Op == MessagesInstrumentation.Op.Enqueue && r.MessageType == typeof(Ping));
 
             Assert.IsNotNull(rec.Subscribers);
             Assert.AreEqual(1, rec.Subscribers.Length);

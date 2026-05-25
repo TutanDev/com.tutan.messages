@@ -1,10 +1,10 @@
-[Home](index) · [Why](MessageBus) · [API Reference](API-Reference) · [Examples](Examples) · [Threading](Threading) · [Performance](Performance) · [Edge Cases](EdgeCases) · [Architecture](Architecture) · **Bootstrap** · [Editor](Editor)
+[Home](index) · [Why](Messages) · [API Reference](API-Reference) · [Examples](Examples) · [Threading](Threading) · [Performance](Performance) · [Edge Cases](EdgeCases) · [Architecture](Architecture) · **Bootstrap** · [Editor](Editor)
 
 ---
 
 # Auto-bootstrap and Opting Out
 
-By default, the package creates a hidden persistent `[MessageBusHost]`
+By default, the package creates a hidden persistent `[MessagesHost]`
 GameObject at startup via `RuntimeInitializeOnLoad`. This GameObject lives
 across scene loads and calls `DrainQueues()` for both buses in `LateUpdate`.
 
@@ -12,9 +12,9 @@ across scene loads and calls `DrainQueues()` for both buses in `LateUpdate`.
 the drainer under your own scene root), add this to your Player settings:
 
 ```
-Scripting Define Symbols:  TUTAN_MESSAGEBUS_DISABLE_AUTOBOOTSTRAP
+Scripting Define Symbols:  TUTAN_MESSAGES_DISABLE_AUTOBOOTSTRAP
 ```
 
-When disabled, attach the `MessageBusHost` component to a persistent
+When disabled, attach the `MessagesHost` component to a persistent
 GameObject yourself, or call `CommandBus.DrainQueues()` and
 `EventBus.DrainQueues()` from your own update logic.

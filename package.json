@@ -1,11 +1,11 @@
 {
   "name": "com.tutan.messages",
   "displayName": "Messages",
-  "version": "0.4.1",
+  "version": "0.7.1",
   "unity": "6000.1",
   "description": "Zero-allocation, struct-based publish/subscribe message bus for Unity 6 and XR. Ref-passed handlers, integer subscription tokens, thread-safe enqueue, automatic LateUpdate draining, and dedicated EventBus (N:M) and CommandBus (N:1) APIs. Built for XR frame budgets \u2014 no GC in the dispatch hot path.",
   "keywords": [
-    "messagebus",
+    "messages",
     "pubsub",
     "events",
     "messaging",

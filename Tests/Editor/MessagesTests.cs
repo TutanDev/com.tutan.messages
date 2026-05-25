@@ -3,11 +3,11 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using NUnit.Framework;
-using Tutan.MessageBus;
+using Tutan.Messages;
 using UnityEngine;
 using UnityEngine.TestTools;
 
-namespace Tutan.MessageBus.Tests
+namespace Tutan.Messages.Tests
 {
     // ── CommandBusTests ──────────────────────────────────────────────────
 
@@ -180,7 +180,7 @@ namespace Tutan.MessageBus.Tests
 
     // ── ConcurrencyTests ─────────────────────────────────────────────────
 
-    public class MessageBusConcurrencyTests
+    public class MessagesConcurrencyTests
     {
         struct ConcurrentMsg : IEvent { public int Value; }
 
