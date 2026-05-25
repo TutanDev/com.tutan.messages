@@ -23,6 +23,17 @@ namespace Tutan.MessageBus.Editor
         const string UxmlPath = "Packages/com.tutan.messages/Editor/MessageBusDebuggerWindow.uxml";
         const string UssPath = "Packages/com.tutan.messages/Editor/MessageBusDebuggerWindow.uss";
 
+        // Persisted filter preferences. Kept in EditorPrefs so the user's filter setup
+        // survives domain reloads (notably entering Play mode) and window reopen.
+        const string KeyEvents = "Tutan.MessageBus.Debugger.Events";
+        const string KeyCommands = "Tutan.MessageBus.Debugger.Commands";
+        const string KeyPublish = "Tutan.MessageBus.Debugger.Publish";
+        const string KeyEnqueue = "Tutan.MessageBus.Debugger.Enqueue";
+        const string KeySubs = "Tutan.MessageBus.Debugger.Subs";
+        const string KeyDrains = "Tutan.MessageBus.Debugger.Drains";
+        const string KeyPayloads = "Tutan.MessageBus.Debugger.Payloads";
+        const string KeyAutoScroll = "Tutan.MessageBus.Debugger.AutoScroll";
+
         [MenuItem("Window/Tutan/Messages Console")]
         public static void Open()
         {
@@ -41,6 +52,7 @@ namespace Tutan.MessageBus.Editor
         bool _showEnqueue = true;
         bool _showSubs = true;
         bool _showDrains;
+        bool _autoScroll = true;
         string _search = string.Empty;
         long _lastTotalProcessed;
 
@@ -52,26 +64,13 @@ namespace Tutan.MessageBus.Editor
         Label _statusLabel;
 
         // ── Lifecycle ────────────────────────────────────────────────────
+        // Instrumentation is toggled with the window's visibility so the bus pays
+        // no cost when nobody is looking. UI construction lives in CreateGUI().
         void OnEnable()
         {
-            var uxml = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(UxmlPath);
-            var uss = AssetDatabase.LoadAssetAtPath<StyleSheet>(UssPath);
-            if (uxml == null)
-            {
-                rootVisualElement.Add(new Label($"Could not load UXML at {UxmlPath}"));
-                return;
-            }
-            uxml.CloneTree(rootVisualElement);
-            if (uss != null) rootVisualElement.styleSheets.Add(uss);
-
-            BindToolbar();
-            BindLog();
-
-            _statusLabel = rootVisualElement.Q<Label>("status-label");
-
             MessageBusInstrumentation.Enabled = true;
             EditorApplication.update += Tick;
-            
+
             // Sync initial state
             _lastTotalProcessed = MessageBusInstrumentation.TotalEver;
         }
@@ -82,10 +81,50 @@ namespace Tutan.MessageBus.Editor
             MessageBusInstrumentation.Enabled = false;
         }
 
+        // CreateGUI runs on open AND after every domain reload — keep it idempotent
+        // (rebuild from scratch, restore state from EditorPrefs).
+        public void CreateGUI()
+        {
+            rootVisualElement.Clear();
+
+            var uxml = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(UxmlPath);
+            var uss = AssetDatabase.LoadAssetAtPath<StyleSheet>(UssPath);
+            if (uxml == null)
+            {
+                rootVisualElement.Add(new Label($"Could not load UXML at {UxmlPath}"));
+                return;
+            }
+            uxml.CloneTree(rootVisualElement);
+            if (uss != null) rootVisualElement.styleSheets.Add(uss);
+
+            LoadPrefs(); // restore filter setup before binding so toggles reflect it
+
+            BindToolbar();
+            BindLog();
+
+            _statusLabel = rootVisualElement.Q<Label>("status-label");
+            UpdateStatus();
+        }
+
+        // Restore persisted filter preferences into fields + instrumentation statics.
+        void LoadPrefs()
+        {
+            _showEvents = EditorPrefs.GetBool(KeyEvents, true);
+            _showCommands = EditorPrefs.GetBool(KeyCommands, true);
+            _showPublish = EditorPrefs.GetBool(KeyPublish, true);
+            _showEnqueue = EditorPrefs.GetBool(KeyEnqueue, true);
+            _showSubs = EditorPrefs.GetBool(KeySubs, true);
+            _showDrains = EditorPrefs.GetBool(KeyDrains, false);
+            _autoScroll = EditorPrefs.GetBool(KeyAutoScroll, true);
+            MessageBusInstrumentation.CapturePayloads = EditorPrefs.GetBool(KeyPayloads, MessageBusInstrumentation.CapturePayloads);
+            MessageBusInstrumentation.RecordDrains = _showDrains;
+        }
+
         // ── UI Wiring ────────────────────────────────────────────────────
         void BindToolbar()
         {
             var pause = rootVisualElement.Q<ToolbarToggle>("pause-toggle");
+            pause.SetValueWithoutNotify(_paused);
             pause.RegisterValueChangedCallback(e => _paused = e.newValue);
 
             rootVisualElement.Q<ToolbarButton>("clear-button").clicked += () =>
@@ -94,30 +133,36 @@ namespace Tutan.MessageBus.Editor
                 _filtered.Clear();
                 _logList?.RefreshItems();
                 _lastTotalProcessed = MessageBusInstrumentation.TotalEver;
+                UpdateStatus();
             };
+
+            var autoScroll = rootVisualElement.Q<ToolbarToggle>("autoscroll-toggle");
+            autoScroll.SetValueWithoutNotify(_autoScroll);
+            autoScroll.RegisterValueChangedCallback(e => { _autoScroll = e.newValue; EditorPrefs.SetBool(KeyAutoScroll, e.newValue); });
 
             var payloads = rootVisualElement.Q<ToolbarToggle>("payloads-toggle");
             payloads.SetValueWithoutNotify(MessageBusInstrumentation.CapturePayloads);
-            payloads.RegisterValueChangedCallback(e => MessageBusInstrumentation.CapturePayloads = e.newValue);
+            payloads.RegisterValueChangedCallback(e => { MessageBusInstrumentation.CapturePayloads = e.newValue; EditorPrefs.SetBool(KeyPayloads, e.newValue); });
 
             var events = rootVisualElement.Q<ToolbarToggle>("events-toggle");
-            events.SetValueWithoutNotify(true);
-            events.RegisterValueChangedCallback(e => { _showEvents = e.newValue; FullRebuild(); });
+            events.SetValueWithoutNotify(_showEvents);
+            events.RegisterValueChangedCallback(e => { _showEvents = e.newValue; EditorPrefs.SetBool(KeyEvents, e.newValue); FullRebuild(); });
 
             var commands = rootVisualElement.Q<ToolbarToggle>("commands-toggle");
-            commands.SetValueWithoutNotify(true);
-            commands.RegisterValueChangedCallback(e => { _showCommands = e.newValue; FullRebuild(); });
+            commands.SetValueWithoutNotify(_showCommands);
+            commands.RegisterValueChangedCallback(e => { _showCommands = e.newValue; EditorPrefs.SetBool(KeyCommands, e.newValue); FullRebuild(); });
 
-            BindOpToggle("op-publish-toggle", true, v => { _showPublish = v; FullRebuild(); });
-            BindOpToggle("op-enqueue-toggle", true, v => { _showEnqueue = v; FullRebuild(); });
-            BindOpToggle("op-subs-toggle", true, v => { _showSubs = v; FullRebuild(); });
-            
+            BindOpToggle("op-publish-toggle", _showPublish, KeyPublish, v => { _showPublish = v; FullRebuild(); });
+            BindOpToggle("op-enqueue-toggle", _showEnqueue, KeyEnqueue, v => { _showEnqueue = v; FullRebuild(); });
+            BindOpToggle("op-subs-toggle", _showSubs, KeySubs, v => { _showSubs = v; FullRebuild(); });
+
             var drainToggle = rootVisualElement.Q<ToolbarToggle>("op-drain-toggle");
-            drainToggle.SetValueWithoutNotify(false);
+            drainToggle.SetValueWithoutNotify(_showDrains);
             drainToggle.RegisterValueChangedCallback(e =>
             {
                 _showDrains = e.newValue;
                 MessageBusInstrumentation.RecordDrains = e.newValue;
+                EditorPrefs.SetBool(KeyDrains, e.newValue);
                 FullRebuild();
             });
 
@@ -132,11 +177,11 @@ namespace Tutan.MessageBus.Editor
             // Next Tick will catch up from the start of the buffer
         }
 
-        void BindOpToggle(string name, bool initial, Action<bool> setter)
+        void BindOpToggle(string name, bool initial, string prefKey, Action<bool> setter)
         {
             var t = rootVisualElement.Q<ToolbarToggle>(name);
             t.SetValueWithoutNotify(initial);
-            t.RegisterValueChangedCallback(e => setter(e.newValue));
+            t.RegisterValueChangedCallback(e => { EditorPrefs.SetBool(prefKey, e.newValue); setter(e.newValue); });
         }
 
         void BindLog()
@@ -155,23 +200,31 @@ namespace Tutan.MessageBus.Editor
         {
             var row = new VisualElement();
             row.AddToClassList("mb-log-row");
-            row.Add(new Label { name = "time" }.WithClass("mb-log-col-time"));
-            row.Add(new Label { name = "frame" }.WithClass("mb-log-col-frame"));
-            row.Add(new Label { name = "bus" }.WithClass("mb-log-col-bus"));
-            row.Add(new Label { name = "op" }.WithClass("mb-log-col-op"));
-            row.Add(new Label { name = "type" }.WithClass("mb-log-col-type"));
+            var time = new Label { name = "time" }.WithClass("mb-log-col-time");
+            var frame = new Label { name = "frame" }.WithClass("mb-log-col-frame");
+            var bus = new Label { name = "bus" }.WithClass("mb-log-col-bus");
+            var op = new Label { name = "op" }.WithClass("mb-log-col-op");
+            var type = new Label { name = "type" }.WithClass("mb-log-col-type");
+            row.Add(time);
+            row.Add(frame);
+            row.Add(bus);
+            row.Add(op);
+            row.Add(type);
+            // Cache child refs so bindItem (called on every scroll tick) doesn't re-query.
+            row.userData = new[] { time, frame, bus, op, type };
             return row;
         }
 
         void BindLogRow(VisualElement row, int i)
         {
             if (i < 0 || i >= _filtered.Count) return;
+            if (row.userData is not Label[] cols || cols.Length < 5) return;
             var r = _filtered[i];
-            var time = (Label)row.ElementAt(0);
-            var frame = (Label)row.ElementAt(1);
-            var bus = (Label)row.ElementAt(2);
-            var op = (Label)row.ElementAt(3);
-            var type = (Label)row.ElementAt(4);
+            var time = cols[0];
+            var frame = cols[1];
+            var bus = cols[2];
+            var op = cols[3];
+            var type = cols[4];
 
             time.text = new DateTime(r.TimestampTicks, DateTimeKind.Utc).ToLocalTime().ToString("HH:mm:ss.fff", CultureInfo.InvariantCulture);
             frame.text = "f" + r.Frame.ToString(CultureInfo.InvariantCulture);
@@ -199,18 +252,22 @@ namespace Tutan.MessageBus.Editor
         // ── Tick (per editor frame) ──────────────────────────────────────
         void Tick()
         {
-            if (_paused) return;
+            if (_logList == null || _paused) return; // UI may not be built yet (OnEnable runs before CreateGUI)
 
             long total = MessageBusInstrumentation.TotalEver;
-            if (total == _lastTotalProcessed) 
-            { 
-                UpdateStatus(); 
-                return; 
+            if (total == _lastTotalProcessed)
+            {
+                UpdateStatus();
+                return;
             }
 
             ProcessIncremental(total);
 
             _logList.RefreshItems();
+
+            // Keep the newest record in view as traffic arrives.
+            if (_autoScroll && _filtered.Count > 0)
+                _logList.ScrollToItem(_filtered.Count - 1);
 
             UpdateStatus();
             Repaint();
@@ -299,39 +356,31 @@ namespace Tutan.MessageBus.Editor
 
             if (r.MessageType != null && (r.Op == MessageBusInstrumentation.Op.Publish || r.Op == MessageBusInstrumentation.Op.Enqueue))
             {
-                sb.Append("\nSubscribers (Current):\n");
-                AppendSubscribers(sb, r.Bus, r.MessageType);
+                sb.Append("\nSubscribers (at ").Append(r.Op == MessageBusInstrumentation.Op.Publish ? "publish" : "enqueue").Append(" time):\n");
+                AppendSubscribers(sb, r.Subscribers);
             }
 
             return sb.ToString();
         }
 
-        static void AppendSubscribers(StringBuilder sb, MessageBusInstrumentation.BusKind bus, Type type)
+        // Renders the snapshot frozen into the record at fire time — not the live
+        // bus — so the list reflects who was subscribed when the message went out.
+        static void AppendSubscribers(StringBuilder sb, MessageBusInstrumentation.Subscriber[] subscribers)
         {
-            IEnumerable<(Type MessageType, IEnumerable<(int TokenId, Delegate Handler)> Entries)> allSubs;
-            if (bus == MessageBusInstrumentation.BusKind.Event)
-                allSubs = EventBus.Bus.EnumerateSubscriptions();
-            else
-                allSubs = CommandBus.Bus.EnumerateSubscriptions();
-
-            bool found = false;
-            foreach (var group in allSubs)
+            if (subscribers == null)
             {
-                if (group.MessageType == type)
-                {
-                    foreach (var entry in group.Entries)
-                    {
-                        found = true;
-                        string target = entry.Handler?.Target?.GetType().FullName ?? "(static)";
-                        string method = entry.Handler?.Method?.Name ?? "?";
-                        sb.Append("  #").Append(entry.TokenId).Append(" ").Append(target).Append('.').Append(method).Append('\n');
-                    }
-                    break;
-                }
+                sb.Append("  (not captured)\n");
+                return;
             }
 
-            if (!found)
+            if (subscribers.Length == 0)
+            {
                 sb.Append("  (none)\n");
+                return;
+            }
+
+            foreach (var s in subscribers)
+                sb.Append("  #").Append(s.TokenId).Append(' ').Append(s.Target).Append('.').Append(s.Method).Append('\n');
         }
 
         static void FormatPayload(StringBuilder sb, object payload)

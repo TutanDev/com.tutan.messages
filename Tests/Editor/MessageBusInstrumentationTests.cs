@@ -145,6 +145,53 @@ namespace Tutan.MessageBus.Tests
         }
 
         [Test]
+        public void Publish_CapturesSubscriberSnapshot_FrozenAgainstLaterUnsubscribe()
+        {
+            var a = EventBus.Subscribe<Ping>((ref Ping p) => { });
+            EventBus.Subscribe<Ping>((ref Ping p) => { });
+
+            EventBus.Publish(new Ping { Value = 1 });
+
+            // Mutate the live bus after the publish was recorded.
+            EventBus.Unsubscribe(a);
+
+            var rec = MessageBusInstrumentation.Snapshot()
+                .Single(r => r.Op == MessageBusInstrumentation.Op.Publish && r.MessageType == typeof(Ping));
+
+            // The snapshot is frozen at publish time: still two subscribers,
+            // even though the live bus now has one.
+            Assert.IsNotNull(rec.Subscribers);
+            Assert.AreEqual(2, rec.Subscribers.Length);
+            Assert.AreEqual(1, EventBus.GetSubscriberCount<Ping>());
+        }
+
+        [Test]
+        public void Publish_WithNoSubscribers_CapturesEmptySnapshot()
+        {
+            EventBus.Publish(new Ping { Value = 1 });
+
+            var rec = MessageBusInstrumentation.Snapshot()
+                .Single(r => r.Op == MessageBusInstrumentation.Op.Publish && r.MessageType == typeof(Ping));
+
+            Assert.IsNotNull(rec.Subscribers);
+            Assert.AreEqual(0, rec.Subscribers.Length);
+        }
+
+        [Test]
+        public void Enqueue_CapturesSubscriberSnapshot()
+        {
+            EventBus.Subscribe<Ping>((ref Ping p) => { });
+
+            EventBus.Enqueue(new Ping { Value = 1 });
+
+            var rec = MessageBusInstrumentation.Snapshot()
+                .Single(r => r.Op == MessageBusInstrumentation.Op.Enqueue && r.MessageType == typeof(Ping));
+
+            Assert.IsNotNull(rec.Subscribers);
+            Assert.AreEqual(1, rec.Subscribers.Length);
+        }
+
+        [Test]
         public void EnumerateSubscriptions_ListsActiveHandlers()
         {
             EventBus.Subscribe<Ping>((ref Ping p) => { });

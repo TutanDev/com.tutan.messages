@@ -35,6 +35,25 @@ namespace Tutan.MessageBus
             DrainEnd
         }
 
+        /// <summary>
+        /// One subscriber as it existed at the moment a message was published or
+        /// enqueued. Captured into <see cref="Record.Subscribers"/> so the debugger
+        /// shows who was actually listening at fire time, not who is listening now.
+        /// </summary>
+        public readonly struct Subscriber
+        {
+            public readonly int TokenId;
+            public readonly string Target;
+            public readonly string Method;
+
+            internal Subscriber(int tokenId, string target, string method)
+            {
+                TokenId = tokenId;
+                Target = target;
+                Method = method;
+            }
+        }
+
         public readonly struct Record
         {
             public readonly long TimestampTicks;
@@ -48,11 +67,18 @@ namespace Tutan.MessageBus
             public readonly string HandlerTarget;
             public readonly string HandlerMethod;
 
+            /// <summary>
+            /// Frozen snapshot of the subscribers at the instant of a Publish/Enqueue
+            /// record. Null for ops where it does not apply (Subscribe, Drain, …).
+            /// </summary>
+            public readonly Subscriber[] Subscribers;
+
             internal Record(
                 long ticks, int frame, int threadId,
                 BusKind bus, Op op, Type messageType,
                 int tokenId, object payloadBox,
-                string handlerTarget, string handlerMethod)
+                string handlerTarget, string handlerMethod,
+                Subscriber[] subscribers)
             {
                 TimestampTicks = ticks;
                 Frame = frame;
@@ -64,6 +90,7 @@ namespace Tutan.MessageBus
                 PayloadBox = payloadBox;
                 HandlerTarget = handlerTarget;
                 HandlerMethod = handlerMethod;
+                Subscribers = subscribers;
             }
         }
 
@@ -79,6 +106,17 @@ namespace Tutan.MessageBus
         // Frame counter — updated by MessageBusHost from main thread so worker
         // threads can read it without touching UnityEngine.Time.
         internal static int CurrentFrame;
+
+        /// <summary>
+        /// Stamp the current main-thread frame onto subsequent records. Call once
+        /// per frame from the main thread (the auto-host does this in LateUpdate).
+        /// [Conditional] so the call — and the Time.frameCount read passed to it —
+        /// is stripped from release player builds. This is also the only static
+        /// member the host touches, so stripping it means the type is never
+        /// initialized in release and the ring buffer below is never allocated.
+        /// </summary>
+        [Conditional("UNITY_EDITOR"), Conditional("TUTAN_MESSAGEBUS_DEBUG")]
+        public static void SyncFrame(int frame) => CurrentFrame = frame;
 
         const int DefaultCapacity = 4096;
         static Record[] s_buffer = new Record[DefaultCapacity];
@@ -128,23 +166,53 @@ namespace Tutan.MessageBus
         // [Conditional] strips these at the call site in release builds.
 
         [Conditional("UNITY_EDITOR"), Conditional("TUTAN_MESSAGEBUS_DEBUG")]
-        internal static void RecordPublish<T>(BusKind bus, ref T message) where T : unmanaged, IMessage
+        internal static void RecordPublish<T>(BusKind bus, ref T message, ChannelBase channel) where T : unmanaged, IMessage
         {
             if (!Enabled) return;
             object payload = CapturePayloads ? (object)message : null;
             Append(new Record(
                 DateTime.UtcNow.Ticks, CurrentFrame, Thread.CurrentThread.ManagedThreadId,
-                bus, Op.Publish, typeof(T), 0, payload, null, null));
+                bus, Op.Publish, typeof(T), 0, payload, null, null, CaptureSubscribers(channel)));
         }
 
         [Conditional("UNITY_EDITOR"), Conditional("TUTAN_MESSAGEBUS_DEBUG")]
-        internal static void RecordEnqueue<T>(BusKind bus, in T message) where T : unmanaged, IMessage
+        internal static void RecordEnqueue<T>(BusKind bus, in T message, ChannelBase channel) where T : unmanaged, IMessage
         {
             if (!Enabled) return;
             object payload = CapturePayloads ? (object)message : null;
             Append(new Record(
                 DateTime.UtcNow.Ticks, CurrentFrame, Thread.CurrentThread.ManagedThreadId,
-                bus, Op.Enqueue, typeof(T), 0, payload, null, null));
+                bus, Op.Enqueue, typeof(T), 0, payload, null, null, CaptureSubscribers(channel)));
+        }
+
+        static readonly Subscriber[] s_noSubscribers = Array.Empty<Subscriber>();
+
+        // Freeze the channel's current handlers into immutable strings. Resolving
+        // Target/Method here (not at display time) is what makes this a true
+        // point-in-time snapshot: the delegates may later be unsubscribed or GC'd.
+        //
+        // Enqueue can run on a worker thread while the main thread mutates the
+        // entry list, so enumeration is best-effort — instrumentation must never
+        // throw into the bus. A torn read just yields a slightly incomplete list.
+        static Subscriber[] CaptureSubscribers(ChannelBase channel)
+        {
+            if (channel == null) return s_noSubscribers;
+            try
+            {
+                List<Subscriber> list = null;
+                foreach (var (tokenId, handler) in channel.EnumerateEntries())
+                {
+                    (list ??= new List<Subscriber>()).Add(new Subscriber(
+                        tokenId,
+                        handler?.Target?.GetType().FullName ?? "(static)",
+                        handler?.Method?.Name ?? "?"));
+                }
+                return list != null ? list.ToArray() : s_noSubscribers;
+            }
+            catch
+            {
+                return s_noSubscribers;
+            }
         }
 
         [Conditional("UNITY_EDITOR"), Conditional("TUTAN_MESSAGEBUS_DEBUG")]
@@ -155,7 +223,7 @@ namespace Tutan.MessageBus
             string method = handler?.Method?.Name;
             Append(new Record(
                 DateTime.UtcNow.Ticks, CurrentFrame, Thread.CurrentThread.ManagedThreadId,
-                bus, Op.Subscribe, messageType, tokenId, null, target, method));
+                bus, Op.Subscribe, messageType, tokenId, null, target, method, null));
         }
 
         [Conditional("UNITY_EDITOR"), Conditional("TUTAN_MESSAGEBUS_DEBUG")]
@@ -164,7 +232,7 @@ namespace Tutan.MessageBus
             if (!Enabled) return;
             Append(new Record(
                 DateTime.UtcNow.Ticks, CurrentFrame, Thread.CurrentThread.ManagedThreadId,
-                bus, Op.Unsubscribe, messageType, tokenId, null, null, null));
+                bus, Op.Unsubscribe, messageType, tokenId, null, null, null, null));
         }
 
         [Conditional("UNITY_EDITOR"), Conditional("TUTAN_MESSAGEBUS_DEBUG")]
@@ -173,7 +241,7 @@ namespace Tutan.MessageBus
             if (!Enabled || !RecordDrains) return;
             Append(new Record(
                 DateTime.UtcNow.Ticks, CurrentFrame, Thread.CurrentThread.ManagedThreadId,
-                bus, start ? Op.DrainStart : Op.DrainEnd, null, 0, null, null, null));
+                bus, start ? Op.DrainStart : Op.DrainEnd, null, 0, null, null, null, null));
         }
 
         static void Append(Record record)

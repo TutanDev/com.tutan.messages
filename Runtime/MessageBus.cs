@@ -234,9 +234,13 @@ namespace Tutan.MessageBus
         /// </summary>
         public void Publish<T>(ref T message) where T : unmanaged, TBase
         {
-            MessageBusInstrumentation.RecordPublish(_instrumentationKind, ref message);
+            // Look up the channel first so instrumentation can snapshot the
+            // subscribers as they are at this instant. channelBase is null when
+            // nothing has ever subscribed — the publish is still recorded.
+            _channels.TryGetValue(typeof(T), out var channelBase);
+            MessageBusInstrumentation.RecordPublish(_instrumentationKind, ref message, channelBase);
 
-            if (!_channels.TryGetValue(typeof(T), out var channelBase)) return;
+            if (channelBase == null) return;
 
             using var _ = s_publishMarker.Auto();
             ((Channel<T>)channelBase).Publish(ref message);
@@ -257,8 +261,9 @@ namespace Tutan.MessageBus
         /// </summary>
         public void Enqueue<T>(in T message) where T : unmanaged, TBase
         {
-            MessageBusInstrumentation.RecordEnqueue(_instrumentationKind, in message);
-            GetOrCreateChannel<T>().Enqueue(message);
+            var channel = GetOrCreateChannel<T>();
+            MessageBusInstrumentation.RecordEnqueue(_instrumentationKind, in message, channel);
+            channel.Enqueue(message);
         }
 
         /// <summary>

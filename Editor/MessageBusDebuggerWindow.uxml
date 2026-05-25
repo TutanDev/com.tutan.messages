@@ -4,6 +4,7 @@
         <uie:Toolbar name="toolbar-main" class="mb-toolbar">
             <uie:ToolbarToggle name="pause-toggle" text="Pause" tooltip="Pause capture (records still flow but window stops refreshing)." />
             <uie:ToolbarButton name="clear-button" text="Clear" tooltip="Clear the captured record buffer." />
+            <uie:ToolbarToggle name="autoscroll-toggle" text="Auto-scroll" tooltip="Keep the newest record in view as traffic arrives." />
             <ui:VisualElement class="mb-spacer-flex" />
             <uie:ToolbarSearchField name="search-field" />
             <ui:Label name="status-label" class="mb-status" />
@@ -24,9 +25,9 @@
         <ui:VisualElement name="body" class="mb-body">
 
             <ui:VisualElement name="log-panel" class="mb-panel">
-                <ui:TwoPaneSplitView fixed-pane-initial-dimension="350" orientation="Horizontal">
+                <ui:TwoPaneSplitView view-data-key="tutan-mb-split" fixed-pane-initial-dimension="350" orientation="Horizontal">
                     <ui:VisualElement class="mb-log-list-wrap">
-                        <ui:ListView name="log-list" fixed-item-height="20" show-alternating-row-backgrounds="ContentOnly" selection-type="Single" />
+                        <ui:ListView name="log-list" view-data-key="tutan-mb-log-list" fixed-item-height="20" show-alternating-row-backgrounds="ContentOnly" selection-type="Single" />
                     </ui:VisualElement>
                     <ui:VisualElement class="mb-detail-wrap">
                         <ui:Label name="detail-header" text="Select a row to inspect" class="mb-detail-header" />

@@ -20,8 +20,11 @@ The package ships with an editor window for live introspection of bus traffic:
 It is a single virtualized log of recent `Subscribe`, `Unsubscribe`, `Publish`,
 `Enqueue`, and (optionally) drain operations with timestamp, frame, bus (E/C),
 op, and type. Selecting a row pretty-prints the payload (if capture is on),
-handler details, and the *current* subscribers for the selected message type
-in the right pane.
+handler details, and — for `Publish`/`Enqueue` rows — the subscribers as they
+were **at the moment the message was sent** in the right pane. This subscriber
+list is a snapshot frozen into the record at fire time, not a live query, so
+subscribing or unsubscribing afterwards does not change what a past record
+shows.
 
 Toolbar: **Pause** (freeze the view), **Clear** (empty the ring buffer),
 **Capture payloads** (box struct payloads into records so they can be
@@ -40,8 +43,12 @@ The instrumentation hooks on `MessageBus.Publish` / `Enqueue` /
 ```
 
 so the C# compiler strips every call site at compile time when neither
-define is set. **In release player builds the bus runs exactly as before
-— no branches, no allocations.**
+define is set. The per-frame frame-counter sync in `MessageBusHost` goes
+through the same kind of `[Conditional]` method (`SyncFrame`), so it strips
+too. With every touchpoint gone, `MessageBusInstrumentation`'s static
+constructor never runs in a release player, so its ~256 KB record ring
+buffer is never even allocated. **In release player builds the bus runs
+exactly as before — no branches, no allocations, no buffer.**
 
 To enable the window in **development builds** (so QA can capture on-device),
 add the `TUTAN_MESSAGEBUS_DEBUG` scripting define under **Project Settings →

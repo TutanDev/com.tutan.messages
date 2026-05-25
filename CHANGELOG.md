@@ -2,6 +2,29 @@
 
 All notable changes to `com.tutan.messagebus` will be documented in this file.
 
+## [0.4.1] - 2026-05-25
+
+### Fixed
+- **Messages Console** subscriber list in the detail panel is now a snapshot
+  captured at the instant a message was published or enqueued, instead of a
+  live query of the bus performed when the row is selected. Previously,
+  subscribing or unsubscribing after a message was sent would retroactively
+  change the subscriber list shown for that past record. `Record` now carries
+  a frozen `Subscriber[]` (token, target type, handler method), resolved to
+  strings at capture time so the snapshot survives later unsubscription or GC.
+
+### Changed
+- The per-frame frame-counter update in `MessageBusHost` now goes through a
+  new `[Conditional]` `MessageBusInstrumentation.SyncFrame(int)` instead of
+  assigning the `CurrentFrame` field directly. This was the last
+  instrumentation touchpoint that survived in release player builds; the
+  direct assignment also forced the instrumentation's static constructor to
+  run, eagerly allocating the ~256 KB record ring buffer even when it was
+  never used. With the call stripped (no `UNITY_EDITOR` /
+  `TUTAN_MESSAGEBUS_DEBUG`), the type is never touched in release, the buffer
+  is never allocated, and there is zero instrumentation cost in shipping
+  builds.
+
 ## [0.4.0] - 2026-05-20
 
 ### Added
@@ -10,7 +33,10 @@ All notable changes to `com.tutan.messagebus` will be documented in this file.
   optional drain) operations with timestamp, frame, bus (E/C), op, and type.
   Row selection pretty-prints the payload and lists current subscribers for
   the selected message type. Toolbar exposes Pause, Clear, Capture payloads,
-  Events/Commands toggles, per-op toggles, and full-type-name search.
+  Events/Commands toggles, per-op toggles, Auto-scroll, and full-type-name
+  search. Filter selections and payload capture persist across domain reloads
+  (including entering Play mode) and window reopen via `EditorPrefs`; the log
+  scroll position and the list/detail splitter restore via `viewDataKey`.
 - **`MessageBusInstrumentation`** public static surface — `Enabled`,
   `CapturePayloads`, `Snapshot()` — for wiring custom diagnostics or in-game
   overlays. All hooks decorated with
