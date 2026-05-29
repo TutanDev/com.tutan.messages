@@ -20,9 +20,10 @@ namespace Tutan.Messages
     /// <code>
     /// CommandBus.TryInstall(out var error, r => r.Handle&lt;T&gt;(instance.Handle));
     /// </code>
-    /// The Commands window (<c>Window ▸ Tutan ▸ Commands</c>) audits these
-    /// declarations, flagging any command with zero handlers (orphan) or more
-    /// than one (an N:1 violation).
+    /// The commands authoring view embedded in
+    /// <c>Project Settings ▸ Tutan ▸ Messages</c> audits these declarations,
+    /// flagging any command with zero handlers (orphan) or more than one (an N:1
+    /// violation).
     /// </summary>
     public interface ICommandHandler<T> : ICommandHandler where T : unmanaged, ICommand
     {

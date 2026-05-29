@@ -9,8 +9,8 @@ namespace Tutan.Messages.Editor
 {
     public sealed class CommandsAuthoringView : VisualElement
     {
-        const string UxmlPath = "Packages/com.tutan.messages/Editor/Authoring/CommandsAuthoringWindow.uxml";
-        const string UssPath = "Packages/com.tutan.messages/Editor/Authoring/CommandsAuthoringWindow.uss";
+        const string UxmlPath = "Packages/com.tutan.messages/Editor/Authoring/CommandsAuthoringView.uxml";
+        const string UssPath = "Packages/com.tutan.messages/Editor/Authoring/CommandsAuthoringView.uss";
 
         const string KeyOnlyWarnings = "Tutan.Messages.Commands.OnlyWarnings";
 

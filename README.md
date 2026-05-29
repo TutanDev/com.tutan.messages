@@ -33,8 +33,9 @@ EventBus.Publish(new PlayerScored { Points = 100, Timestamp = Time.time });
 EventBus.Unsubscribe(token);
 ```
 
-That's it. The bus is auto-bootstrapped at startup — no manual setup, no
-prefab to drag into your scene.
+That's it. Open **Project Settings → Tutan → Messages** once and flip
+**Auto-Install Drainers** on — the bus is then drained for you every frame,
+with no prefab to drag into a scene.
 
 ## Features
 
@@ -43,16 +44,19 @@ prefab to drag into your scene.
 - **EventBus (N:M)** for notifications, **CommandBus (N:1)** for intents
   (CQRS-friendly).
 - **Editor tooling** — a live **Messages Console** for bus traffic and a
-  **Commands** window that audits the command → handler routing table and flags
-  any command with zero or multiple handlers.
+  **Project Settings → Tutan → Messages** page that drives the three opt-in
+  scripting defines and embeds a static command → handler audit (flagging any
+  command with zero or multiple handlers).
 - **Thread-safe `Enqueue`** for network/decode/async callbacks; deferred
   dispatch on the main thread via `DrainQueues()`.
 - **Subscription tokens** — explicit lifecycle, no leaked lambdas, no
   `-=` bugs with closures.
 - **Profiler markers** on every entry point. Visible in Unity Profiler timeline.
-- **Auto-bootstrap** via `RuntimeInitializeOnLoad`. Opt out with the
-  `TUTAN_MESSAGES_DISABLE_AUTOBOOTSTRAP` scripting define if you prefer
-  manual control.
+- **Opt-in bootstrap** via `RuntimeInitializeOnLoad`. Toggle
+  **Auto-Install Drainers** and **Auto-Install Command Bus** in the settings
+  page (or set `TUTAN_MESSAGES_AUTOINSTALL_DRAINERS` /
+  `TUTAN_MESSAGES_AUTOINSTALL_COMMANDBUS` directly) to have the host and
+  handlers wired up at startup; leave them off for manual control.
 - **Unity 6.0 (6000.1) and newer.** Works on Windows, Mac, Linux, iOS,
   Android, WebGL, all XR platforms (Quest, PCVR, visionOS).
 

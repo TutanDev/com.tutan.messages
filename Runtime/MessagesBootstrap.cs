@@ -39,7 +39,7 @@ namespace Tutan.Messages
         }
 #endif
 
-#if true
+#if TUTAN_MESSAGES_AUTOINSTALL_COMMANDBUS
         // Runs at AfterAssembliesLoaded — late enough that user assemblies are
         // available for reflection, early enough that handlers are bound before
         // any BeforeSceneLoad code can publish a command.

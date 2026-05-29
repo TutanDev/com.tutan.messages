@@ -5,8 +5,8 @@ namespace Tutan.Messages
     /// <summary>
     /// MonoBehaviour that drains <see cref="CommandBus"/> and <see cref="EventBus"/>
     /// queues every <c>LateUpdate</c>. Created automatically at startup by
-    /// <see cref="MessagesBootstrap"/> unless the
-    /// <c>TUTAN_MESSAGES_DISABLE_AUTOBOOTSTRAP</c> scripting define is set.
+    /// <see cref="MessagesBootstrap"/> when <c>TUTAN_MESSAGES_AUTOINSTALL_DRAINERS</c>
+    /// is defined (toggle <b>Auto-Install Drainers</b> on the Messages settings page).
     /// You can also attach it manually to a persistent GameObject in your scene.
     /// </summary>
     [AddComponentMenu("Tutan/Messages Host")]
