@@ -1,7 +1,7 @@
 // ============================================================================
 // MessagesDebuggerWindow.cs — Live view of EventBus / CommandBus traffic.
 //
-// Opens via "Window → Tutan → Message Bus Debugger". While open it sets
+// Opens via "Window → Tutan → Message Console". While open it sets
 // MessagesInstrumentation.Enabled = true; while closed it disables it again
 // so the bus pays no instrumentation cost when nobody is looking.
 // ============================================================================
@@ -18,10 +18,10 @@ using UnityEngine.UIElements;
 
 namespace Tutan.Messages.Editor
 {
-    public sealed class MessagesDebuggerWindow : EditorWindow
+    public sealed class MessagesConsoleWindow : EditorWindow
     {
-        const string UxmlPath = "Packages/com.tutan.messages/Editor/MessagesDebuggerWindow.uxml";
-        const string UssPath = "Packages/com.tutan.messages/Editor/MessagesDebuggerWindow.uss";
+        const string UxmlPath = "Packages/com.tutan.messages/Editor/Console/MessagesConsoleWindow.uxml";
+        const string UssPath = "Packages/com.tutan.messages/Editor/Console/MessagesConsoleWindow.uss";
 
         // Persisted filter preferences. Kept in EditorPrefs so the user's filter setup
         // survives domain reloads (notably entering Play mode) and window reopen.
@@ -36,7 +36,7 @@ namespace Tutan.Messages.Editor
         [MenuItem("Window/Tutan/Messages Console")]
         public static void Open()
         {
-            var w = GetWindow<MessagesDebuggerWindow>();
+            var w = GetWindow<MessagesConsoleWindow>();
             w.titleContent = new GUIContent("Messages Console");
             w.minSize = new Vector2(640, 320);
             w.Show();

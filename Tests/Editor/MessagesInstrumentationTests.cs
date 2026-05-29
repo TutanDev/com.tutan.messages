@@ -73,7 +73,7 @@ namespace Tutan.Messages.Tests
         [Test]
         public void CommandBus_TagsRecordsAsCommandKind()
         {
-            CommandBus.Subscribe<DoThing>((ref DoThing m) => { });
+            CommandBus.TryInstall(out _, r => r.Handle<DoThing>((ref DoThing m) => { }));
             CommandBus.Publish(new DoThing { Value = 1 });
 
             var publishRec = MessagesInstrumentation.Snapshot()

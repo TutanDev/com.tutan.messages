@@ -7,9 +7,9 @@ namespace Tutan.Messages
     /// </summary>
     public static class EventBus
     {
-        static MessageBuse<IEvent> s_bus = new MessageBuse<IEvent>(MessagesInstrumentation.BusKind.Event);
+        static MessageBus<IEvent> s_bus = new MessageBus<IEvent>(MessagesInstrumentation.BusKind.Event);
 
-        internal static MessageBuse<IEvent> Bus => s_bus;
+        internal static MessageBus<IEvent> Bus => s_bus;
 
         /// <summary>Register a handler for event type T. Returns a token for unsubscription.</summary>
         public static SubscriptionToken Subscribe<T>(MessageHandler<T> handler) where T : unmanaged, IEvent
@@ -43,7 +43,7 @@ namespace Tutan.Messages
         /// Clear all subscriptions and queued messages.
         /// Call during test teardown or scene transitions.
         /// </summary>
-        public static void Reset() { s_bus.Dispose(); s_bus = new MessageBuse<IEvent>(MessagesInstrumentation.BusKind.Event); }
+        public static void Reset() { s_bus.Dispose(); s_bus = new MessageBus<IEvent>(MessagesInstrumentation.BusKind.Event); }
 
         // Wipe static state on every Enter Play Mode so the bus stays clean
         // when the user has disabled Domain Reload (Project Settings →

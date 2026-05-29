@@ -160,7 +160,7 @@ namespace Tutan.Messages
         }
     }
 
-    // ── Messages<TBase> ────────────────────────────────────────────────
+    // ── MessageBus<TBase> ──────────────────────────────────────────────
 
     /// <summary>
     /// Generic message bus parameterized by message base type (ICommand or IEvent).
@@ -171,7 +171,7 @@ namespace Tutan.Messages
     /// main-thread call: channel creation goes through a ConcurrentDictionary,
     /// and the message lands in a per-channel ConcurrentQueue.
     /// </summary>
-    public class MessageBuse<TBase> : IDisposable where TBase : IMessage
+    public class MessageBus<TBase> : IDisposable where TBase : IMessage
     {
         // ConcurrentDictionary so worker-thread Enqueue can race safely with
         // main-thread Subscribe/Publish/DrainQueues. Lookups are lock-free;
@@ -188,9 +188,9 @@ namespace Tutan.Messages
         static readonly ProfilerMarker s_publishMarker = new("Messages.Publish");
         static readonly ProfilerMarker s_drainMarker = new("Messages.DrainQueues");
 
-        public MessageBuse() : this(MessagesInstrumentation.BusKind.Event) { }
+        public MessageBus() : this(MessagesInstrumentation.BusKind.Event) { }
 
-        internal MessageBuse(MessagesInstrumentation.BusKind kind)
+        internal MessageBus(MessagesInstrumentation.BusKind kind)
         {
             _instrumentationKind = kind;
         }

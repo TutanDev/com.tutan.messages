@@ -42,6 +42,9 @@ prefab to drag into your scene.
   multicast delegates, no struct copies.
 - **EventBus (N:M)** for notifications, **CommandBus (N:1)** for intents
   (CQRS-friendly).
+- **Editor tooling** — a live **Messages Console** for bus traffic and a
+  **Commands** window that audits the command → handler routing table and flags
+  any command with zero or multiple handlers.
 - **Thread-safe `Enqueue`** for network/decode/async callbacks; deferred
   dispatch on the main thread via `DrainQueues()`.
 - **Subscription tokens** — explicit lifecycle, no leaked lambdas, no

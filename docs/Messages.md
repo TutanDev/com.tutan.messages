@@ -82,9 +82,11 @@ a separate lookup table.
 
 - **`IEvent`** — a notification of something that *happened*. Any number of
   handlers may subscribe. Naming: past tense (`PlayerScored`, `OrderPlaced`).
-- **`ICommand`** — an *intent* to do something. Exactly one handler may
-  subscribe; a second `Subscribe` call throws. Naming: imperative
-  (`MovePlayer`, `PlaceOrder`). This enforces the CQRS rule at runtime.
+- **`ICommand`** — an *intent* to do something. Exactly one handler is bound,
+  once, at the composition root via `CommandBus.TryInstall`. Naming: imperative
+  (`MovePlayer`, `PlaceOrder`). This enforces the CQRS rule: the N:1 constraint
+  is validated at install time and a duplicate (or null) handler is reported as
+  a `false` return value, not thrown.
 
 ### Handlers
 

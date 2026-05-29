@@ -4,21 +4,24 @@
 
 # API Reference
 
-All methods are exposed on the static `EventBus` and `CommandBus` types (and
-on the underlying `Messages` instance they wrap). Signatures are identical
-across both buses; the only behavioural difference is that `CommandBus`
-enforces a single subscriber per message type.
+The dispatch methods — `Publish`, `Enqueue`, `DrainQueues` — are identical
+across `EventBus` and `CommandBus` (and the underlying `MessageBus<TBase>`
+instance they wrap). The buses differ only in how handlers are registered: `EventBus` is a
+mutable N:M bus you `Subscribe`/`Unsubscribe` at any time, while `CommandBus`
+handlers are declared once at the composition root via `TryInstall` — see
+[CommandBus](#commandbus).
 
-## Subscribe
+## Subscribe (EventBus)
 
 ```csharp
 SubscriptionToken Subscribe<T>(MessageHandler<T> handler) where T : unmanaged, IMessage
 ```
 
 Registers `handler` for messages of type `T`. Returns a token for later
-unsubscription. Main thread only.
+unsubscription. Main thread only. `EventBus` only — for commands, see
+[CommandBus](#commandbus).
 
-## Unsubscribe
+## Unsubscribe (EventBus)
 
 ```csharp
 bool Unsubscribe(SubscriptionToken token)
@@ -71,6 +74,40 @@ frame. Main thread only. By default `MessagesHost` does this for you — see
 int GetSubscriberCount<T>() where T : unmanaged, IMessage
 int ChannelCount { get; }
 ```
+
+## CommandBus
+
+`CommandBus` shares `Publish`, `Enqueue`, `DrainQueues`, `Reset`,
+`GetSubscriberCount<T>`, and `ChannelCount` with `EventBus`. It has **no**
+`Subscribe`/`Unsubscribe`. The single handler for each command type is declared
+once at the composition root:
+
+```csharp
+bool TryInstall(out string error, Action<CommandRegistry> configure)
+```
+
+Returns `true` and atomically swaps in the new bindings on success. On a
+duplicate command type or a null handler it returns `false`, sets `error` to a
+message naming the offending type(s), and leaves the live bus untouched. Calling
+it again rebuilds the bus from scratch (composition-root semantics).
+
+Inside the callback, bind each command with the `CommandRegistry` builder:
+
+```csharp
+CommandRegistry Handle<T>(MessageHandler<T> handler) where T : unmanaged, ICommand
+```
+
+```csharp
+bool ok = CommandBus.TryInstall(out string error, r => r
+    .Handle<PlaceOrder>(orderHandler.Handle)
+    .Handle<MovePlayer>(movement.Handle));
+
+if (!ok) Debug.LogError(error); // names the offending command type(s)
+```
+
+For multi-app builds that vary by feature set or backend, express that variation at the
+composition root: select which handlers to bind and which backend to inject into them,
+then funnel them all through one `TryInstall`. See `decisions/CommandBus.md`.
 
 ## Lifecycle
 

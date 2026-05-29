@@ -20,33 +20,24 @@ namespace Tutan.Messages.Tests
         [TearDown] public void TearDown() => CommandBus.Reset();
 
         [Test]
-        public void Publish_DeliversMessageToSubscriber()
+        public void Install_ThenPublish_DeliversMessageToHandler()
         {
             int received = -1;
-            CommandBus.Subscribe<MovePlayer>((ref MovePlayer m) => received = m.Value);
+            bool ok = CommandBus.TryInstall(out var error,
+                r => r.Handle<MovePlayer>((ref MovePlayer m) => received = m.Value));
 
+            Assert.IsTrue(ok, error);
             CommandBus.Publish(new MovePlayer { Value = 42 });
 
             Assert.AreEqual(42, received);
         }
 
         [Test]
-        public void Unsubscribe_PreventsFutureDelivery()
-        {
-            int callCount = 0;
-            var token = CommandBus.Subscribe<MovePlayer>((ref MovePlayer m) => callCount++);
-
-            CommandBus.Unsubscribe(token);
-            CommandBus.Publish(new MovePlayer { Value = 1 });
-
-            Assert.AreEqual(0, callCount);
-        }
-
-        [Test]
-        public void Enqueue_ThenDrainQueues_DeliversMessage()
+        public void Install_ThenEnqueueDrain_DeliversMessage()
         {
             int received = -1;
-            CommandBus.Subscribe<MovePlayer>((ref MovePlayer m) => received = m.Value);
+            CommandBus.TryInstall(out _,
+                r => r.Handle<MovePlayer>((ref MovePlayer m) => received = m.Value));
 
             CommandBus.Enqueue(new MovePlayer { Value = 99 });
             Assert.AreEqual(-1, received); // deferred — not yet delivered
@@ -56,24 +47,53 @@ namespace Tutan.Messages.Tests
         }
 
         [Test]
-        public void DoubleUnsubscribe_ReturnsFalse_NoException()
+        public void DuplicateHandler_FailsInstall_NoThrow()
         {
-            var token = CommandBus.Subscribe<MovePlayer>((ref MovePlayer m) => { });
+            // Two handlers for the same command type — reported, not thrown.
+            bool ok = CommandBus.TryInstall(out var error, r => r
+                .Handle<PlaceOrder>((ref PlaceOrder m) => { })
+                .Handle<PlaceOrder>((ref PlaceOrder m) => { }));
 
-            bool first  = CommandBus.Unsubscribe(token);
-            bool second = CommandBus.Unsubscribe(token);
-
-            Assert.IsTrue(first);
-            Assert.IsFalse(second);
+            Assert.IsFalse(ok);
+            StringAssert.Contains(nameof(PlaceOrder), error);
+            // Atomic: a failed install leaves the live bus untouched.
+            Assert.AreEqual(0, CommandBus.GetSubscriberCount<PlaceOrder>());
         }
 
         [Test]
-        public void DuplicateSubscribe_Throws()
+        public void NullHandler_FailsInstall()
         {
-            CommandBus.Subscribe<PlaceOrder>((ref PlaceOrder m) => { });
+            bool ok = CommandBus.TryInstall(out var error,
+                r => r.Handle<MovePlayer>(null));
 
-            Assert.Throws<InvalidOperationException>(
-                () => CommandBus.Subscribe<PlaceOrder>((ref PlaceOrder m) => { }));
+            Assert.IsFalse(ok);
+            StringAssert.Contains(nameof(MovePlayer), error);
+            Assert.AreEqual(0, CommandBus.GetSubscriberCount<MovePlayer>());
+        }
+
+        [Test]
+        public void Reinstall_ReplacesPreviousHandlers()
+        {
+            int first = 0, second = 0;
+            CommandBus.TryInstall(out _, r => r.Handle<MovePlayer>((ref MovePlayer m) => first++));
+            CommandBus.TryInstall(out _, r => r.Handle<MovePlayer>((ref MovePlayer m) => second++));
+
+            CommandBus.Publish(new MovePlayer { Value = 1 });
+
+            Assert.AreEqual(0, first);  // the first handler was replaced
+            Assert.AreEqual(1, second);
+        }
+
+        [Test]
+        public void Reset_RemovesHandlers()
+        {
+            int callCount = 0;
+            CommandBus.TryInstall(out _, r => r.Handle<MovePlayer>((ref MovePlayer m) => callCount++));
+
+            CommandBus.Reset();
+            CommandBus.Publish(new MovePlayer { Value = 1 });
+
+            Assert.AreEqual(0, callCount);
         }
     }
 
@@ -141,6 +161,18 @@ namespace Tutan.Messages.Tests
             EventBus.Publish(new OrderPlaced { Value = 1 });
 
             Assert.AreEqual(0, callCount);
+        }
+
+        [Test]
+        public void DoubleUnsubscribe_ReturnsFalse_NoException()
+        {
+            var token = EventBus.Subscribe<PlayerMoved>((ref PlayerMoved m) => { });
+
+            bool first  = EventBus.Unsubscribe(token);
+            bool second = EventBus.Unsubscribe(token);
+
+            Assert.IsTrue(first);
+            Assert.IsFalse(second);
         }
     }
 

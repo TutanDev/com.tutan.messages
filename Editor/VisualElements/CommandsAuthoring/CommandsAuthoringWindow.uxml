@@ -1,0 +1,15 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="True">
+    <ui:VisualElement name="root" class="ca-root">
+
+        <uie:Toolbar name="toolbar" class="ca-toolbar">
+            <uie:ToolbarButton name="refresh-button" text="Refresh" tooltip="Re-scan all ICommand types and their ICommandHandler&lt;T&gt; implementors." />
+            <uie:ToolbarToggle name="warnings-toggle" text="Only warnings" tooltip="Show only commands with no handler or more than one handler." />
+            <ui:VisualElement class="ca-spacer-flex" />
+            <uie:ToolbarSearchField name="search-field" />
+            <ui:Label name="status-label" class="ca-status" />
+        </uie:Toolbar>
+
+        <ui:ScrollView name="cards" class="ca-cards" />
+
+    </ui:VisualElement>
+</ui:UXML>

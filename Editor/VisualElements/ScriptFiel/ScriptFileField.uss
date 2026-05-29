@@ -1,0 +1,32 @@
+/* Styles for the ScriptFileField control. Loaded by the control itself (see
+   ScriptFileField.cs) so every window that uses it gets the look for free —
+   these rules live in exactly one place. Colors fall back to literals so the
+   control is correct even outside a window that defines the theme variables. */
+
+.tutan-script-field {
+    padding: 1px 4px;
+    border-radius: 3px;
+    font-size: 12px;
+}
+
+.tutan-script-field:hover {
+    background-color: rgba(255, 255, 255, 0.07);
+}
+
+.tutan-script-field__label {
+    color: var(--color-accent-hover, #4a89cb);
+}
+
+.tutan-script-field:hover .tutan-script-field__label {
+    color: white;
+}
+
+/* Type with no resolvable .cs file — dimmed, no hover affordance */
+.tutan-script-field--missing .tutan-script-field__label {
+    color: var(--color-text-dim, #909090);
+    -unity-font-style: italic;
+}
+
+.tutan-script-field--missing:hover {
+    background-color: transparent;
+}

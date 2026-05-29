@@ -28,6 +28,8 @@ namespace Tutan.Messages.Editor
         public static readonly string labelUssClassName = ussClassName + "__label";
         public static readonly string missingUssClassName = ussClassName + "--missing";
 
+        const string UssPath = "Packages/com.tutan.messages/Editor/ScriptFileField.uss";
+
         readonly Image _icon;
         readonly Label _label;
         MonoScript _script;
@@ -60,6 +62,11 @@ namespace Tutan.Messages.Editor
             _label.style.overflow = Overflow.Hidden;
             _label.style.textOverflow = TextOverflow.Ellipsis;
             Add(_label);
+
+            // The control carries its own stylesheet so every consumer renders
+            // identically without copying USS into each window.
+            var uss = AssetDatabase.LoadAssetAtPath<StyleSheet>(UssPath);
+            if (uss != null) styleSheets.Add(uss);
 
             RegisterCallback<ClickEvent>(OnClick);
         }

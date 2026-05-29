@@ -80,6 +80,50 @@ foreach (var r in records)
 
 ---
 
+## Commands Window
+
+**Window → Tutan → Commands** is a static, edit-time audit of the command →
+handler routing table. Unlike the Messages Console (which shows *observed*
+runtime traffic), this window shows what is *declared* in your code, with no
+play mode required.
+
+It lists every `ICommand` struct found via `TypeCache` as a card and resolves
+its handler(s) through the `ICommandHandler<T>` interface. The command and each
+handler render as clickable `ScriptFileField` rows — single-click pings the
+`.cs` file in the Project window, double-click opens it.
+
+Because commands are **N:1** (exactly one handler each), a card is flagged when
+a command has:
+
+- **no handler** — an *orphan*; nothing handles it, or
+- **more than one** — an N:1 violation; only one handler may be bound.
+
+Toolbar: a name **search**, an **Only warnings** toggle (persisted in
+`EditorPrefs`) to hide healthy commands, and **Refresh** to re-scan on demand
+(the window already re-scans after every recompile / domain reload).
+
+```csharp
+using Tutan.Messages;
+
+// Implementing ICommandHandler<T> makes a handler discoverable by the window.
+public sealed class MovementManager : ICommandHandler<MovePlayer>
+{
+    public void Handle(ref MovePlayer cmd) { /* ... */ }
+}
+```
+
+`ICommandHandler<T>` is **declarative only** — it does not auto-register.
+`Handle(ref T)` matches the bus's `MessageHandler<T>` delegate, so you still
+bind it at the composition root exactly as before, and the window simply reads
+the declaration:
+
+```csharp
+var movement = new MovementManager();
+CommandBus.TryInstall(out var error, r => r.Handle<MovePlayer>(movement.Handle));
+```
+
+---
+
 ## Inspector Support (Serialized Message References)
 
 The package provides serializable wrappers — `EventReference` and

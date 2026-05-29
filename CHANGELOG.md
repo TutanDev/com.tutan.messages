@@ -2,6 +2,147 @@
 
 All notable changes to `com.tutan.messages` will be documented in this file.
 
+## [0.11.0] - 2026-05-27
+
+### Added
+- **`ICommandHandler<T>`** (`Tutan.Messages`) — a declarative contract a class
+  implements to state that it handles command `T`:
+
+  ```csharp
+  public sealed class MovementManager : ICommandHandler<MovePlayer>
+  {
+      public void Handle(ref MovePlayer cmd) { /* ... */ }
+  }
+
+  // Composition root — Handle matches MessageHandler<T>, so it binds directly:
+  CommandBus.TryInstall(out var error, r => r.Handle<MovePlayer>(movement.Handle));
+  ```
+
+  The interface is **declarative only** — it does *not* auto-register. Handlers are
+  still bound at the composition root via `CommandBus.TryInstall` exactly as before;
+  `ICommandHandler<T>` adds a discoverable, self-documenting marker on top. A
+  non-generic `ICommandHandler` base is included as the tooling discovery seam.
+  The **BasicPubSub** sample's `ScoreBoard` now implements `ICommandHandler<ResetScore>`
+  to demonstrate the pattern.
+- **Commands** editor window (`Window → Tutan → Commands`). A static, edit-time
+  audit of the command → handler routing table: it lists every `ICommand` type
+  found via `TypeCache` as a card, resolves its handler(s) through
+  `ICommandHandler<T>`, and renders the command and each handler as clickable
+  `ScriptFileField` rows (single-click pings the `.cs`, double-click opens it).
+  Each card is flagged when a command has **no handler** (orphan) or **more than
+  one** (an N:1 violation). Toolbar offers a name search, an **Only warnings**
+  filter (persisted in `EditorPrefs`), and a **Refresh** re-scan. This restores
+  the orphan/duplicate routing audit that the removed `CommandBusProfile`
+  inspector provided in 0.9.0, now driven by the handler interface rather than a
+  module-discovery layer.
+
+### Changed
+- **`ScriptFileField` now carries its own stylesheet** (`Editor/ScriptFileField.uss`),
+  loaded by the control itself, so every window that uses it renders identically
+  without copying the `.tutan-script-field*` rules into each window's USS. The
+  Messages Console's stylesheet no longer defines those rules.
+
+## [0.10.0] - 2026-05-27
+
+### Removed
+- **Data-driven `CommandBus` composition (the `ICommandModule` / `CommandBusProfile`
+  layer added in 0.9.0).** The module-discovery subsystem is gone; compose the bus by
+  calling `CommandBus.TryInstall` directly at the composition root and binding instance
+  handlers there. Removed types, all from `Tutan.Messages`:
+  - `ICommandModule`
+  - `CommandBusComposer`
+  - `CommandBusProfile` (and its `Create ▸ Tutan ▸ Command Bus Profile` asset menu)
+  - `CommandBusInstaller`
+  - `IServiceProvider.GetService<T>()` / `GetRequiredService<T>()` extensions
+    (`ServiceProviderExtensions`)
+
+  **Migration:** replace `CommandBusComposer.Compose(profile, services, ...)` (and any
+  `CommandBusInstaller` on a boot object) with a single `CommandBus.TryInstall(out err,
+  r => r.Handle<T>(handler) ...)` call. Move each module's `Register` body into that
+  callback, resolving collaborators however your app already does. `CommandBus`,
+  `CommandRegistry`, and `CommandBus.TryInstall` are unchanged — this only removes the
+  discovery layer that sat on top of them. Delete any `CommandBusProfile` assets.
+
+## [0.9.0] - 2026-05-26
+
+### Added
+- **Data-driven `CommandBus` composition via a `CommandBusProfile` asset.** Instead of
+  hand-listing module registrations in code, you now declare command handlers in
+  `ICommandModule` implementations and pick which assemblies to scan from a profile asset
+  edited in the Project window (`Create ▸ Tutan ▸ Command Bus Profile`).
+
+  ```csharp
+  public sealed class PoolsModule : ICommandModule
+  {
+      public void Register(CommandRegistry registry, IServiceProvider services)
+      {
+          var pools = services.GetRequiredService<PoolsManager>();
+          registry.Handle<JoinPool>(pools.OnJoin)
+                  .Handle<LeavePool>(pools.OnLeave);
+      }
+  }
+
+  // Composition root — once at boot, before the first publish:
+  if (!CommandBusComposer.Compose(profile, services, out var error))
+      Debug.LogError(error);
+  ```
+
+  New types, all in `Tutan.Messages`:
+  - **`ICommandModule`** — `Register(CommandRegistry, IServiceProvider)`; the unit of
+    declared command→handler binding. Discovered by interface, instantiated via a public
+    parameterless constructor.
+  - **`CommandBusProfile`** — `ScriptableObject` listing the assemblies to scan. Its custom
+    inspector lists every `ICommand` type found in those assemblies and flags any **orphan**
+    (no handler) or **duplicate** (two modules) — an edit-time audit of the routing table.
+  - **`CommandBusComposer.Compose(profile, services, out error)`** — discovers all modules
+    in the profile's assemblies and runs them into one `CommandRegistry` through a single
+    `CommandBus.TryInstall`, so N:1 is still validated across the union and the install stays
+    atomic.
+  - **`CommandBusInstaller`** — optional `MonoBehaviour` holding an explicit profile
+    reference; composes once in `Awake` (or call `Compose(services)` yourself when handlers
+    need injected dependencies). One per app.
+  - **`IServiceProvider.GetService<T>()` / `GetRequiredService<T>()`** extensions — the seam
+    for the implementation axis (inject the selected backend into a module). The package
+    takes no DI dependency; supply any `IServiceProvider`.
+
+  This is additive — manual `CommandBus.TryInstall` is unchanged and still works. See
+  `decisions/CommandBus.md` (Amendment, 2026-05-26) for how this reconciles with the
+  boot-once-frozen model.
+
+## [0.8.0] - 2026-05-26
+
+### Changed
+- **BREAKING — `CommandBus` handlers are now bound at the composition root, and
+  the N:1 rule no longer throws.** `CommandBus.Subscribe<T>` and
+  `CommandBus.Unsubscribe` are removed. Instead, declare every command handler in
+  one place via the new:
+
+  ```csharp
+  bool ok = CommandBus.TryInstall(out string error, r => r
+      .Handle<PlaceOrder>(orderHandler.Handle)
+      .Handle<MovePlayer>(movement.Handle));
+
+  if (!ok) Debug.LogError(error); // names the offending command type(s)
+  ```
+
+  A duplicate command type or a null handler is reported as `false` + an `error`
+  string (the previous `InvalidOperationException` on a second `Subscribe` is
+  gone). `TryInstall` is atomic — a failed install leaves the currently installed
+  handlers untouched — and calling it again rebuilds the command bus wholesale.
+  `Publish` / `Enqueue` / `DrainQueues` / `Reset` are unchanged, so publishers do
+  not change.
+
+  **Migration:** move each `CommandBus.Subscribe<T>(handler)` out of `OnEnable`
+  (or wherever it lived) into a single startup composition root that calls
+  `CommandBus.TryInstall(... r.Handle<T>(handler) ...)`. Drop the matching
+  `CommandBus.Unsubscribe` calls; use `CommandBus.Reset()` or re-`TryInstall` to
+  rebind. **`EventBus` is unchanged** — it remains a mutable, subscribe-anytime,
+  N:M bus with `Subscribe`/`Unsubscribe`.
+
+### Added
+- **`CommandRegistry`** — the fluent builder passed to `CommandBus.TryInstall`.
+  `Handle<T>(MessageHandler<T>)` binds the single handler for command type `T`.
+
 ## [0.7.1] - 2026-05-25
 
 ### Changed
@@ -57,9 +198,10 @@ All notable changes to `com.tutan.messages` will be documented in this file.
     `Tutan.MessageBus.Editor` / `Tutan.MessageBus.Samples.*`).
   - Assemblies `Tutan.MessageBus`, `Tutan.MessageBus.Editor`, `Tutan.MessageBus.Tests`
     → `Tutan.Messages`, `Tutan.Messages.Editor`, `Tutan.Messages.Tests`.
-  - Core type `MessageBus<TBase>` → `Messages<TBase>`; `MessageBusHost`,
-    `MessageBusBootstrap`, `MessageBusInstrumentation`, and `MessageBusDebuggerWindow`
-    → `MessagesHost`, `MessagesBootstrap`, `MessagesInstrumentation`, `MessagesDebuggerWindow`.
+  - `MessageBusHost`, `MessageBusBootstrap`, `MessageBusInstrumentation`, and
+    `MessageBusDebuggerWindow` → `MessagesHost`, `MessagesBootstrap`,
+    `MessagesInstrumentation`, `MessagesDebuggerWindow`. The core generic type
+    `MessageBus<TBase>` keeps its name.
   - Scripting defines `TUTAN_MESSAGEBUS_DEBUG` and
     `TUTAN_MESSAGEBUS_DISABLE_AUTOBOOTSTRAP` → `TUTAN_MESSAGES_DEBUG` and
     `TUTAN_MESSAGES_DISABLE_AUTOBOOTSTRAP`.
@@ -153,7 +295,7 @@ All notable changes to `com.tutan.messages` will be documented in this file.
   single subscriber). `EventBus` consistently described as **N:M** (was
   inconsistently called `1:N` in `package.json`).
 - `ICommand` doc clarifies that the single-handler rule is enforced by
-  `CommandBus`, not the core `Messages<TBase>`.
+  `CommandBus`, not the core `MessageBus<TBase>`.
 
 ## [0.2.0] - 2026-05-18
 
@@ -163,10 +305,10 @@ All notable changes to `com.tutan.messages` will be documented in this file.
 - `[CallerFilePath]` / `[CallerLineNumber]` / `[CallerMemberName]` parameters
   on `Publish<T>` / `Enqueue<T>`. These existed solely to power the debugger's
   click-to-source navigation.
-- `Messages<TBase>(string busName)` constructor — the bus name was used
+- `MessageBus<TBase>(string busName)` constructor — the bus name was used
   only by the diagnostics layer.
 
-The runtime assembly is now strictly the dispatcher: `Messages<TBase>`,
+The runtime assembly is now strictly the dispatcher: `MessageBus<TBase>`,
 `EventBus`, `CommandBus`, `MessagesHost`, `MessagesBootstrap`, and the
 message marker interfaces. No editor-only code paths remain in `Runtime/`.
 
@@ -174,7 +316,7 @@ message marker interfaces. No editor-only code paths remain in `Runtime/`.
 
 ### Added
 - Initial release.
-- `Messages<TBase>` core with zero-allocation `ref`-based dispatch.
+- `MessageBus<TBase>` core with zero-allocation `ref`-based dispatch.
 - `EventBus` (N:M fan-out) and `CommandBus` (N:1 — many publishers, single subscriber, duplicate-handler guard).
 - `IMessage`, `IEvent`, `ICommand` marker interfaces. Messages are `unmanaged struct`.
 - `SubscriptionToken` for deterministic unsubscription (no delegate-equality pitfalls).

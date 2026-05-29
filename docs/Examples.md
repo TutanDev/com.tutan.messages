@@ -110,7 +110,12 @@ public class VideoTextureUpdater : MonoBehaviour
 }
 ```
 
-## Commands (1:1 Dispatch)
+## Commands (N:1 Dispatch)
+
+Unlike events, command handlers are not subscribed ad-hoc. A command has exactly
+one handler, and that handler is declared **once at the composition root** via
+`CommandBus.TryInstall`. The N:1 rule is validated there and reported as a return
+value — a duplicate or null handler never throws.
 
 ```csharp
 public struct PlaceOrder : ICommand
@@ -119,13 +124,10 @@ public struct PlaceOrder : ICommand
     public int Quantity;
 }
 
+// The handler is just a method — it does NOT subscribe itself.
 public class OrderHandler : MonoBehaviour
 {
-    SubscriptionToken _token;
-    void OnEnable()  => _token = CommandBus.Subscribe<PlaceOrder>(Handle);
-    void OnDisable() => CommandBus.Unsubscribe(_token);
-
-    void Handle(ref PlaceOrder cmd)
+    public void Handle(ref PlaceOrder cmd)
     {
         // Single handler — guaranteed by CommandBus
         ProcessOrder(cmd.ItemId, cmd.Quantity);
@@ -134,9 +136,30 @@ public class OrderHandler : MonoBehaviour
     void ProcessOrder(int itemId, int qty) { /* ... */ }
 }
 
-// Caller — same publish API
+// ── Composition root — runs once at startup ───────────────────────
+public class GameInstaller : MonoBehaviour
+{
+    [SerializeField] OrderHandler _orderHandler;
+
+    void Awake()
+    {
+        bool ok = CommandBus.TryInstall(out string error, r => r
+            .Handle<PlaceOrder>(_orderHandler.Handle));
+        //  .Handle<NextCommand>(...)   // one Handle per command type
+
+        if (!ok)
+            Debug.LogError($"Command install failed: {error}");
+    }
+}
+
+// Caller — same publish API as before
 CommandBus.Publish(new PlaceOrder { ItemId = 7, Quantity = 3 });
 ```
+
+Registering a second handler for the same command type — e.g. two
+`.Handle<PlaceOrder>(...)` calls — makes `TryInstall` return `false` with an
+`error` that names `PlaceOrder`. The install is atomic, so the previously
+installed handlers are left untouched.
 
 ## Scene Transition Cleanup
 
@@ -145,7 +168,7 @@ public class SceneLoader : MonoBehaviour
 {
     async void LoadScene(string sceneName)
     {
-        // Reset the bus before unloading — prevents stale subscriptions
+        // Reset the buses before unloading — prevents stale subscriptions
         // from destroyed MonoBehaviours receiving messages during the
         // transition frame.
         EventBus.Reset();
@@ -153,7 +176,8 @@ public class SceneLoader : MonoBehaviour
 
         await SceneManager.LoadSceneAsync(sceneName);
 
-        // New scene's OnEnable calls will re-subscribe.
+        // The new scene's OnEnable calls re-subscribe events; its composition
+        // root re-runs CommandBus.TryInstall to rebind command handlers.
     }
 }
 ```
