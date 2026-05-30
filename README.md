@@ -62,11 +62,13 @@ with no prefab to drag into a scene.
 
 ## Samples
 
-Three samples included, importable from the Package Manager:
+One sample included, importable from the Package Manager:
 
-- **BasicPubSub** — minimal EventBus and CommandBus usage.
-- **ThreadedDispatch** — enqueue from a worker thread, drain on main.
-- **XRHandGesture** — one input source, multiple decoupled subscribers.
+- **Basic Publish / Subscribe** — a live score in a self-contained scene. A button
+  publishes commands, a background thread enqueues commands off the main thread, and
+  the score UI listens for events. Covers the CommandBus (N:1), the EventBus (N:M),
+  the composition-root `TryInstall` pattern, and thread-safe `Enqueue`/drain in one
+  place. Drop the `BasicPubSubSample` component on a GameObject and press Play.
 
 ## Full documentation
 

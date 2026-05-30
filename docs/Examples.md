@@ -4,6 +4,19 @@
 
 # Examples
 
+> **Runnable sample.** Everything below is exercised by the **Basic Publish /
+> Subscribe** sample shipped with the package — import it from **Package Manager
+> ▸ Messages ▸ Samples ▸ Import**. It is a self-contained score clicker (one
+> scene, no inspector wiring) where a button and a background thread both drive a
+> single score model through the buses:
+>
+> | Sample file | Shows |
+> |---|---|
+> | `ScoreHud` / `MenuHud` | `EventBus.Subscribe`/`Unsubscribe` and publishing commands from a view — [Basic Publish / Subscribe](#basic-publish--subscribe) |
+> | `BasicPubSubSample` | Binding every command handler in **one** `TryInstall` at the composition root, and ensuring a `MessagesHost` exists — [Commands](#commands-n1-dispatch), [Bootstrap](Bootstrap) |
+> | `ScoreModel` / `MenuModel` | A single command handler that re-broadcasts results as events |
+> | `ScoreDecayWorker` | `CommandBus.Enqueue` from a background thread — [Queued Dispatch](#queued-dispatch-from-a-worker-thread) |
+
 ## Basic Publish / Subscribe
 
 ```csharp
@@ -109,6 +122,16 @@ public class VideoTextureUpdater : MonoBehaviour
     void UpdateTexture(int i, int w, int h) { /* ... */ }
 }
 ```
+
+`Enqueue` is shared by both buses, so the same pattern works for commands:
+`CommandBus.Enqueue(cmd)` is the thread-safe way to drive a command's single
+handler from off the main thread. The bundled sample uses exactly this — its
+`ScoreDecayWorker` runs a background thread that calls
+`CommandBus.Enqueue(new AdjustScore { ... })` once a second, while the on-screen
+button calls `CommandBus.Publish(new AdjustScore { ... })` on the main thread.
+Both routes reach the one `AdjustScore` handler, which is the whole point of the
+N:1 guarantee: it does not matter who sends a command, or from which thread —
+exactly one handler owns it.
 
 ## Commands (N:1 Dispatch)
 

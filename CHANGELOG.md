@@ -2,6 +2,34 @@
 
 All notable changes to `com.tutan.messages` will be documented in this file.
 
+## [0.12.1] - 2026-05-30
+
+### Changed
+- **Docs now cover the Basic Publish / Subscribe sample.** `docs/Examples.md` gained
+  a callout mapping each sample file to the section that explains it (and the Package
+  Manager import path), and the queued-dispatch example now shows `CommandBus.Enqueue`
+  — the same `AdjustScore` command arriving from both the button (`Publish`, main
+  thread) and `ScoreDecayWorker` (`Enqueue`, background thread) reaching the one
+  handler. `docs/index.md` points to the runnable sample.
+
+## [0.12.0] - 2026-05-29
+
+### Changed
+- **Consolidated the package to a single sample.** The **Basic Publish / Subscribe**
+  sample was rebuilt into one self-contained demo that exercises the whole library:
+  a code-built UI with a score label and a button, a `ScoreModel` that is the single
+  `AdjustScore` command handler and the publisher of `ScoreChanged` events, and a
+  `ScoreDecayWorker` background thread that `Enqueue`s commands off the main thread.
+  Drop the `BasicPubSubSample` component on a GameObject and press Play — no scene
+  wiring. It now covers the CommandBus (N:1), the EventBus (N:M), the composition-root
+  `TryInstall` pattern, and thread-safe `Enqueue`/drain in one place.
+
+### Removed
+- The **Threaded Dispatch** and **XR Hand Gesture** samples. Their concepts
+  (off-thread `Enqueue` + main-thread drain, and one publisher fanning out to many
+  decoupled subscribers) are now folded into the single Basic Publish / Subscribe
+  sample.
+
 ## [0.11.0] - 2026-05-27
 
 ### Added
