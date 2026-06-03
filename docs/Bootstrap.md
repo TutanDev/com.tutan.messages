@@ -45,6 +45,11 @@ constructor. If two handler types claim the same command, the registry's N:1
 rule turns it into one consolidated error logged at startup — the bus is left
 empty rather than partially installed.
 
+The bundled **Basic Publish / Subscribe** sample relies on this path: its
+`ScoreModel` and `MenuModel` are discovered and bound with no composition-root
+code, which is why the sample needs both this toggle and **Auto-Install
+Drainers** enabled to do anything.
+
 With the toggle **off**, declare bindings at your composition root yourself:
 
 ```csharp

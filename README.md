@@ -67,8 +67,11 @@ One sample included, importable from the Package Manager:
 - **Basic Publish / Subscribe** — a live score in a self-contained scene. A button
   publishes commands, a background thread enqueues commands off the main thread, and
   the score UI listens for events. Covers the CommandBus (N:1), the EventBus (N:M),
-  the composition-root `TryInstall` pattern, and thread-safe `Enqueue`/drain in one
-  place. Drop the `BasicPubSubSample` component on a GameObject and press Play.
+  auto-install command-bus discovery (handlers bound from their `ICommandHandler<T>`
+  interfaces, no composition-root code), and thread-safe `Enqueue`/drain in one place.
+  Enable **Auto-Install Command Bus** and **Auto-Install Drainers** under
+  **Project Settings → Tutan → Messages**, drop the `BasicPubSubSample` component on a
+  GameObject, and press Play.
 
 ## Full documentation
 

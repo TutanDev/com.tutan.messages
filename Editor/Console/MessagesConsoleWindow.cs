@@ -20,8 +20,8 @@ namespace Tutan.Messages.Editor
 {
     public sealed class MessagesConsoleWindow : EditorWindow
     {
-        const string UxmlPath = "Packages/com.tutan.messages/Editor/Console/MessagesConsoleWindow.uxml";
-        const string UssPath = "Packages/com.tutan.messages/Editor/Console/MessagesConsoleWindow.uss";
+        static readonly string UxmlPath = PathUtils.RelativePath(".uxml");
+        static readonly string UssPath = PathUtils.RelativePath(".uss");
 
         // Persisted filter preferences. Kept in EditorPrefs so the user's filter setup
         // survives domain reloads (notably entering Play mode) and window reopen.

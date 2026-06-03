@@ -1,10 +1,10 @@
-using Tutan.Messages;
-
 namespace Tutan.Messages.Samples.BasicPubSub
 {
     // ── Messages ─────────────────────────────────────────────────────────
     //
-    // Two message types drive the whole sample:
+    // Two message types carry the core score loop (the lifecycle messages further
+    // down — StartGame / GameStarted / ResetScore / GameEnded — drive menu↔game
+    // switching):
     //
     //   AdjustScore  (ICommand) — N:1. "Change the score by Delta." Sent by the
     //                 button (main thread) AND the decay worker (off thread).
@@ -31,6 +31,8 @@ namespace Tutan.Messages.Samples.BasicPubSub
         public int Total;
         public int Delta;
     }
+
+    public struct ResetScore : ICommand { }
 
     public struct StartGame : ICommand { }
     public struct GameStarted : IEvent { }

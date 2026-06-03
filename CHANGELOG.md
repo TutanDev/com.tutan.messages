@@ -2,6 +2,22 @@
 
 All notable changes to `com.tutan.messages` will be documented in this file.
 
+## [0.12.2] - 2026-06-03
+
+### Changed
+- **Basic Publish / Subscribe sample now binds its command handlers through the
+  auto-install bootstrap instead of an explicit composition-root `TryInstall`.**
+  `ScoreModel` and `MenuModel` are discovered and bound from their
+  `ICommandHandler<T>` interfaces when **Auto-Install Command Bus** and
+  **Auto-Install Drainers** are enabled (**Project Settings → Tutan → Messages**), so
+  the sample carries no hand-written wiring code. Inline doc-comments, the sample
+  `README`, the package `README`, `docs/Examples.md`, and `docs/Bootstrap.md` were
+  updated to match, and the sample `README` now calls out the two required defines up
+  front — without them no handler is bound and the buttons do nothing.
+
+### Fixed
+- Sample docs: the score button is `AdjustScore +1` (the `README` previously said +10).
+
 ## [0.12.1] - 2026-05-30
 
 ### Changed

@@ -1,4 +1,3 @@
-using System;
 using UnityEngine;
 
 namespace Tutan.Messages.Samples.BasicPubSub
@@ -7,16 +6,24 @@ namespace Tutan.Messages.Samples.BasicPubSub
 
     /// <summary>
     /// The one component you add to the scene. Drop it on an empty GameObject and
-    /// press Play — it assembles the whole sample and wires the CommandBus.
+    /// press Play — it switches between the menu and score HUDs and owns the
+    /// game-lifecycle events.
     /// <para>
-    /// This is the only class that knows about all the parts. Everything it builds
-    /// (<see cref="ScoreModel"/>, <see cref="ScoreHud"/>, <see cref="ScoreDecayWorker"/>)
-    /// talks exclusively through the bus, never to each other.
+    /// It deliberately does <b>not</b> wire the CommandBus. The command handlers
+    /// (<see cref="ScoreModel"/>, <see cref="MenuModel"/>) are discovered and bound
+    /// automatically at startup by the auto-install bootstrap, which reflects over every
+    /// <see cref="ICommandHandler{T}"/> and binds it through a single
+    /// <see cref="CommandBus.TryInstall"/>. That requires the
+    /// <c>TUTAN_MESSAGES_AUTOINSTALL_COMMANDBUS</c> and
+    /// <c>TUTAN_MESSAGES_AUTOINSTALL_DRAINERS</c> scripting defines — enable them under
+    /// <b>Project Settings ▸ Tutan ▸ Messages</b> (Auto-Install Command Bus /
+    /// Auto-Install Drainers). Without them no handler is bound and nothing happens.
     /// </para>
     /// <para>
-    /// The N:1 rule lives here: <see cref="AdjustScore"/> is bound to exactly one
-    /// handler via <see cref="CommandBus.TryInstall"/>. A duplicate or null handler is
-    /// reported as a return value (logged below), never thrown.
+    /// Everything it builds (<see cref="ScoreHud"/>, <see cref="ScoreDecayWorker"/>, the
+    /// models) talks exclusively through the bus, never to each other. The N:1 guarantee
+    /// for <see cref="AdjustScore"/> still holds — it is just enforced by the auto-install
+    /// path rather than a hand-written <see cref="CommandBus.TryInstall"/> call here.
     /// </para>
     /// </summary>
     public sealed class BasicPubSubSample : MonoBehaviour
@@ -25,7 +32,7 @@ namespace Tutan.Messages.Samples.BasicPubSub
         [SerializeField] ScoreHud _scoreHud;
 
 
-        MenuModel _menuModel;
+
         ScoreModel _scoreModel;
 
         ScoreDecayWorker _enemy;
@@ -39,26 +46,6 @@ namespace Tutan.Messages.Samples.BasicPubSub
             _menuHud.gameObject.SetActive(true);
             _scoreHud.gameObject.SetActive(false);
 
-            // Make sure queued commands/events get drained on the main thread even if
-            // auto-install of the host is turned off in the Messages settings.
-            EnsureMessagesHost();
-
-            // Build the models and declare each as the single handler for its command.
-            // Both handlers MUST be installed in one TryInstall call — each call rebuilds
-            // the bus from scratch, so a second call would discard the first handler.
-            _menuModel = new();
-            _scoreModel = new();
-            bool ok = CommandBus.TryInstall(out string error, r =>
-            {
-                r.Handle<StartGame>(_menuModel.Handle);
-                r.Handle<AdjustScore>(_scoreModel.Handle);
-            });
-            if (!ok)
-            {
-                Debug.LogError($"[BasicPubSubSample] Command install failed: {error}");
-                return;
-            }
-
             _startToken = EventBus.Subscribe<GameStarted>(OnGameStarted);
             _gameOverToken = EventBus.Subscribe<GameEnded>(OnGameEnded);
         }
@@ -68,11 +55,7 @@ namespace Tutan.Messages.Samples.BasicPubSub
             _scoreHud.gameObject.SetActive(true);
             _menuHud.gameObject.SetActive(false);
 
-            // Reset to the starting score for a fresh game. This publishes ScoreChanged,
-            // so it must run after the HUD is active and subscribed (above).
-            _scoreModel.Reset();
-
-            // Spawn the publishers/subscribers. They find each other through the bus.
+            CommandBus.Publish(new ResetScore());
             _enemy = gameObject.AddComponent<ScoreDecayWorker>();
         }
 
@@ -92,14 +75,6 @@ namespace Tutan.Messages.Samples.BasicPubSub
         {
             EventBus.Unsubscribe(_startToken);
             EventBus.Unsubscribe(_gameOverToken);
-        }
-
-        void EnsureMessagesHost()
-        {
-            if (FindAnyObjectByType<MessagesHost>() != null) return;
-            var go = new GameObject("[MessagesHost]");
-            DontDestroyOnLoad(go);
-            go.AddComponent<MessagesHost>();
         }
     }
 }
