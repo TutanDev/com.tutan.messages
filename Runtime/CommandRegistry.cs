@@ -48,10 +48,6 @@ namespace Tutan.Messages
 
         internal bool HasErrors => _errors.Count > 0;
 
-        // Command types bound so far. Used by the editor audit to report handler
-        // coverage without touching the live CommandBus.
-        internal IReadOnlyCollection<Type> BoundTypes => _seen;
-
         internal string ErrorMessage =>
             "CommandBus.TryInstall failed:" + Environment.NewLine + "  - " +
             string.Join(Environment.NewLine + "  - ", _errors);

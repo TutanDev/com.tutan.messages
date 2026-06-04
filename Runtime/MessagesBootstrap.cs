@@ -1,32 +1,23 @@
-using System;
-using System.Collections.Generic;
 using UnityEngine;
 
 namespace Tutan.Messages
 {
     /// <summary>
-    /// Creates a persistent <see cref="MessagesHost"/> at startup so the bus
-    /// drains queued messages every <c>LateUpdate</c> with zero configuration,
-    /// and optionally auto-installs every declared <see cref="ICommandHandler{T}"/>
-    /// into the <see cref="CommandBus"/>.
+    /// Spawns a persistent <see cref="MessagesHost"/> at startup so both buses
+    /// drain their queued messages every <c>LateUpdate</c> with zero configuration.
     ///
-    /// Behavior is controlled by Scripting Define Symbols (set via the Messages
-    /// project settings page):
-    /// <list type="bullet">
-    /// <item><c>TUTAN_MESSAGES_AUTOINSTALL_DRAINERS</c> — spawns the host that
-    /// calls <see cref="CommandBus.DrainQueues"/> / <see cref="EventBus.DrainQueues"/>
-    /// each frame.</item>
-    /// <item><c>TUTAN_MESSAGES_AUTOINSTALL_COMMANDBUS</c> — reflects over loaded
-    /// assemblies, instantiates every concrete <see cref="ICommandHandler"/> with a
-    /// parameterless constructor, and binds each closed <see cref="ICommandHandler{T}"/>
-    /// it implements through a single <see cref="CommandBus.TryInstall"/>.</item>
-    /// </list>
-    /// When the symbols are absent, you are responsible for the equivalent setup
-    /// at your composition root.
+    /// On by default. Define <c>TUTAN_MESSAGES_NO_AUTO_HOST</c> to opt out when you
+    /// want to own the drain loop yourself — attach <see cref="MessagesHost"/> to a
+    /// persistent GameObject, or call <see cref="CommandBus.DrainQueues"/> /
+    /// <see cref="EventBus.DrainQueues"/> from your own update logic (a PlayerLoop
+    /// callback, a manager, etc.).
+    ///
+    /// Command handlers are <b>not</b> wired here. Bind each command's single handler
+    /// at your composition root through <see cref="CommandBus.TryInstall"/>.
     /// </summary>
     public static class MessagesBootstrap
     {
-#if TUTAN_MESSAGES_AUTOINSTALL_DRAINERS
+#if !TUTAN_MESSAGES_NO_AUTO_HOST
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         static void InstallHost()
         {
@@ -34,80 +25,9 @@ namespace Tutan.Messages
             {
                 hideFlags = HideFlags.HideAndDontSave
             };
-            UnityEngine.Object.DontDestroyOnLoad(go);
+            Object.DontDestroyOnLoad(go);
             go.AddComponent<MessagesHost>();
         }
-#endif
-
-#if TUTAN_MESSAGES_AUTOINSTALL_COMMANDBUS
-        // Runs at AfterAssembliesLoaded — late enough that user assemblies are
-        // available for reflection, early enough that handlers are bound before
-        // any BeforeSceneLoad code can publish a command.
-        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterAssembliesLoaded)]
-        static void InstallCommandHandlers()
-        {
-            var handlerTypes = DiscoverHandlerTypes();
-            if (handlerTypes.Count == 0) return;
-
-            var handleMethod = typeof(CommandRegistry).GetMethod(nameof(CommandRegistry.Handle));
-
-            bool installed = CommandBus.TryInstall(out var error, registry =>
-            {
-                foreach (var type in handlerTypes)
-                {
-                    object instance;
-                    try
-                    {
-                        instance = Activator.CreateInstance(type);
-                    }
-                    catch (Exception ex)
-                    {
-                        Debug.LogError($"[Messages] Auto-install: failed to construct {type.FullName}: {ex.Message}");
-                        continue;
-                    }
-
-                    foreach (var iface in type.GetInterfaces())
-                    {
-                        if (!iface.IsGenericType || iface.GetGenericTypeDefinition() != typeof(ICommandHandler<>))
-                            continue;
-
-                        var commandType = iface.GetGenericArguments()[0];
-                        var delegateType = typeof(MessageHandler<>).MakeGenericType(commandType);
-                        var ifaceHandle = iface.GetMethod(nameof(ICommandHandler<DummyCommand>.Handle));
-                        var del = Delegate.CreateDelegate(delegateType, instance, ifaceHandle);
-                        handleMethod.MakeGenericMethod(commandType).Invoke(registry, new object[] { del });
-                    }
-                }
-            });
-
-            if (!installed)
-                Debug.LogError(error);
-        }
-
-        static List<Type> DiscoverHandlerTypes()
-        {
-            var result = new List<Type>();
-            foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
-            {
-                Type[] types;
-                try { types = asm.GetTypes(); }
-                catch (System.Reflection.ReflectionTypeLoadException ex) { types = ex.Types; }
-
-                foreach (var t in types)
-                {
-                    if (t == null) continue;
-                    if (t.IsAbstract || t.IsInterface || t.ContainsGenericParameters) continue;
-                    if (!typeof(ICommandHandler).IsAssignableFrom(t)) continue;
-                    if (t.GetConstructor(Type.EmptyTypes) == null) continue;
-                    result.Add(t);
-                }
-            }
-            return result;
-        }
-
-        // Only used to give nameof() something concrete to chew on for the
-        // ICommandHandler<T>.Handle lookup. Never instantiated.
-        struct DummyCommand : ICommand { }
 #endif
     }
 }

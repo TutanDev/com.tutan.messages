@@ -12,15 +12,12 @@ namespace Tutan.Messages.Samples.BasicPubSub
     /// an event. That is the whole point of the bus.
     /// </para>
     /// <para>
-    /// It implements <see cref="ICommandHandler{T}"/> once per command it owns. Those
-    /// interfaces are how the auto-install bootstrap finds it: at startup the bootstrap
-    /// reflects over every <see cref="ICommandHandler{T}"/>, instantiates it via its
-    /// parameterless constructor, and binds it through one <see cref="CommandBus.TryInstall"/> —
-    /// there is no composition-root wiring code in this sample. (Requires the
-    /// <c>TUTAN_MESSAGES_AUTOINSTALL_COMMANDBUS</c> define; see <see cref="BasicPubSubSample"/>.)
+    /// Its <c>Handle(ref T)</c> methods match the bus's <c>MessageHandler&lt;T&gt;</c>
+    /// delegate, so <see cref="BasicPubSubSample"/> binds them as this command's single
+    /// handler at the composition root through <see cref="CommandBus.TryInstall"/>.
     /// </para>
     /// </summary>
-    public sealed class ScoreModel : ICommandHandler<AdjustScore>, ICommandHandler<ResetScore>
+    public sealed class ScoreModel
     {
         const int StartingScore = 10;
 

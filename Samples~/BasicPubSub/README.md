@@ -5,16 +5,10 @@ working together with nothing wired directly between the parts.
 
 ## Before you run it
 
-This sample binds its command handlers and drains the buses through the package's
-**auto-install bootstrap**, so it needs two scripting defines turned on:
-
-- **Auto-Install Command Bus** (`TUTAN_MESSAGES_AUTOINSTALL_COMMANDBUS`) — discovers
-  every `ICommandHandler<T>` (here `ScoreModel` and `MenuModel`) and binds it.
-- **Auto-Install Drainers** (`TUTAN_MESSAGES_AUTOINSTALL_DRAINERS`) — spawns the host
-  that drains queued commands/events every frame.
-
-Enable both under **Project Settings ▸ Tutan ▸ Messages**. Without them no handler is
-bound and the buttons do nothing.
+Nothing to configure. `BasicPubSubSample` is the composition root: in `Awake` it
+builds `ScoreModel` and `MenuModel` and binds each command to its single handler
+through one `CommandBus.TryInstall` call. Queue draining is handled for free by the
+auto-spawned `[MessagesHost]`. Just add the component and press Play.
 
 ## Run it
 
@@ -36,9 +30,8 @@ bound and the buttons do nothing.
 Nothing holds a reference to anything else — every interaction goes through a bus:
 
 - **`CommandBus` (N:1)** — `StartGame` → `MenuModel`; `AdjustScore` and `ResetScore`
-  → `ScoreModel`. None of these handlers are wired by hand: the auto-install bootstrap
-  reflects over every `ICommandHandler<T>` and binds them all through a single
-  `CommandBus.TryInstall`, enforcing the N:1 rule (one handler per command type).
+  → `ScoreModel`. All three are bound at the composition root through a single
+  `CommandBus.TryInstall`, which enforces the N:1 rule (one handler per command type).
 - **`EventBus` (N:M)** — `GameStarted` / `GameEnded` drive the HUD switching in
   `BasicPubSubSample`; `ScoreChanged` updates `ScoreHud`. Add another listener
   (logger, sound, analytics) and nothing else has to change.

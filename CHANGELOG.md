@@ -2,6 +2,47 @@
 
 All notable changes to `com.tutan.messages` will be documented in this file.
 
+## [0.13.0] - 2026-06-05
+
+### Removed
+- **`ICommandHandler` / `ICommandHandler<T>` declarative interfaces.** They only
+  fed the reflection auto-install path and the editor audit view, both removed
+  below. Command handlers are now plain methods matching `MessageHandler<T>`
+  (`void Handle(ref T)`), bound at the composition root.
+- **Reflection-based command auto-install** (`TUTAN_MESSAGES_AUTOINSTALL_COMMANDBUS`).
+  Scanning every assembly and `Activator.CreateInstance`-ing handlers only worked
+  for parameterless handlers and fought DI containers. Bind handlers explicitly
+  through `CommandBus.TryInstall` instead.
+- **The Messages project settings page** (**Project Settings → Tutan → Messages**)
+  and its `MessagesProjectSettings` asset. It mutated `PlayerSettings` scripting
+  defines, which caused recompile churn and VCS noise. No more define-juggling UI.
+- **The Commands authoring view** (the edit-time orphan / N:1 audit foldout). It
+  depended on `ICommandHandler<T>`; the N:1 rule is still enforced at install time
+  by `CommandBus.TryInstall`.
+
+### Changed
+- **Queue draining is now on by default with zero configuration.** `MessagesBootstrap`
+  always spawns the persistent `[MessagesHost]` at startup; define
+  `TUTAN_MESSAGES_NO_AUTO_HOST` to opt out and own the drain loop yourself. (Previously
+  gated behind the **Auto-Install Drainers** toggle / `TUTAN_MESSAGES_AUTOINSTALL_DRAINERS`.)
+- **Instrumentation in development builds** is enabled by adding the
+  `TUTAN_MESSAGES_DEBUG` define in **Player → Scripting Define Symbols** directly,
+  rather than via the removed settings page. In the editor it remains always available.
+- **Basic Publish / Subscribe sample** now binds its command handlers at its own
+  composition root: `BasicPubSubSample.Awake` news up `ScoreModel`/`MenuModel` and
+  calls one `CommandBus.TryInstall`. No defines or settings to enable — drop the
+  component on a GameObject and press Play.
+- Docs (`README`, `docs/Bootstrap.md`, `docs/Editor.md`, `docs/Examples.md`, sample
+  `README`) updated to match the trimmed surface.
+
+### Migration
+- Replace `class Foo : ICommandHandler<MyCommand>` with a plain `class Foo` exposing
+  `void Handle(ref MyCommand cmd)`; the method signature is unchanged.
+- If you relied on auto-install, add an explicit composition-root call:
+  `CommandBus.TryInstall(out var error, r => r.Handle<MyCommand>(foo.Handle));`.
+- If you had **Auto-Install Drainers** off and drained manually, define
+  `TUTAN_MESSAGES_NO_AUTO_HOST` to keep that behavior.
+
 ## [0.12.2] - 2026-06-03
 
 ### Changed

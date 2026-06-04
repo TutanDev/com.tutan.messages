@@ -9,21 +9,17 @@ namespace Tutan.Messages.Samples.BasicPubSub
     /// press Play — it switches between the menu and score HUDs and owns the
     /// game-lifecycle events.
     /// <para>
-    /// It deliberately does <b>not</b> wire the CommandBus. The command handlers
-    /// (<see cref="ScoreModel"/>, <see cref="MenuModel"/>) are discovered and bound
-    /// automatically at startup by the auto-install bootstrap, which reflects over every
-    /// <see cref="ICommandHandler{T}"/> and binds it through a single
-    /// <see cref="CommandBus.TryInstall"/>. That requires the
-    /// <c>TUTAN_MESSAGES_AUTOINSTALL_COMMANDBUS</c> and
-    /// <c>TUTAN_MESSAGES_AUTOINSTALL_DRAINERS</c> scripting defines — enable them under
-    /// <b>Project Settings ▸ Tutan ▸ Messages</b> (Auto-Install Command Bus /
-    /// Auto-Install Drainers). Without them no handler is bound and nothing happens.
+    /// This is the composition root: in <see cref="Awake"/> it builds the command
+    /// handlers (<see cref="ScoreModel"/>, <see cref="MenuModel"/>) and binds each
+    /// command to its single handler through one <see cref="CommandBus.TryInstall"/>
+    /// call. Queue draining is handled for free by the auto-spawned
+    /// <c>[MessagesHost]</c>, so there is nothing else to wire — just press Play.
     /// </para>
     /// <para>
     /// Everything it builds (<see cref="ScoreHud"/>, <see cref="ScoreDecayWorker"/>, the
     /// models) talks exclusively through the bus, never to each other. The N:1 guarantee
-    /// for <see cref="AdjustScore"/> still holds — it is just enforced by the auto-install
-    /// path rather than a hand-written <see cref="CommandBus.TryInstall"/> call here.
+    /// for <see cref="AdjustScore"/> is enforced by <see cref="CommandBus.TryInstall"/>:
+    /// exactly one handler owns the command no matter who publishes it.
     /// </para>
     /// </summary>
     public sealed class BasicPubSubSample : MonoBehaviour
@@ -31,9 +27,8 @@ namespace Tutan.Messages.Samples.BasicPubSub
         [SerializeField] MenuHud _menuHud;
         [SerializeField] ScoreHud _scoreHud;
 
-
-
         ScoreModel _scoreModel;
+        MenuModel _menuModel;
 
         ScoreDecayWorker _enemy;
 
@@ -45,6 +40,19 @@ namespace Tutan.Messages.Samples.BasicPubSub
         {
             _menuHud.gameObject.SetActive(true);
             _scoreHud.gameObject.SetActive(false);
+
+            // Composition root: bind each command to its one handler. The models are
+            // plain C# objects — their Handle(ref T) methods match MessageHandler<T>.
+            _scoreModel = new ScoreModel();
+            _menuModel = new MenuModel();
+
+            bool ok = CommandBus.TryInstall(out string error, r => r
+                .Handle<AdjustScore>(_scoreModel.Handle)
+                .Handle<ResetScore>(_scoreModel.Handle)
+                .Handle<StartGame>(_menuModel.Handle));
+
+            if (!ok)
+                Debug.LogError($"[BasicPubSub] Command install failed: {error}");
 
             _startToken = EventBus.Subscribe<GameStarted>(OnGameStarted);
             _gameOverToken = EventBus.Subscribe<GameEnded>(OnGameEnded);

@@ -12,71 +12,6 @@ call site in release player builds. The inspector drawers live under
 
 ---
 
-## Project Settings
-
-The package adds a settings page at **Project Settings → Tutan → Messages**.
-It owns three toggles, each backed by a Scripting Define Symbol that is
-written to the active build target's player settings on toggle and re-synced
-on every editor load (so the project state matches the asset even after a
-VCS pull or hand-edit):
-
-| Toggle | Define | Effect |
-|---|---|---|
-| **Enable Instrumentation** | `TUTAN_MESSAGES_DEBUG` | Activates the Messages Console hooks. With this off, every `[Conditional]` call site is stripped at compile time — no branches, no buffer, no cost. |
-| **Auto-Install Drainers** | `TUTAN_MESSAGES_AUTOINSTALL_DRAINERS` | Spawns the hidden `[MessagesHost]` GameObject at startup so `CommandBus.DrainQueues()` / `EventBus.DrainQueues()` are called every `LateUpdate`. |
-| **Auto-Install Command Bus** | `TUTAN_MESSAGES_AUTOINSTALL_COMMANDBUS` | Reflects over loaded assemblies, instantiates every concrete `ICommandHandler` with a parameterless constructor, and binds each closed `ICommandHandler<T>` it implements through one `CommandBus.TryInstall` at `AfterAssembliesLoaded`. |
-
-Settings are stored in `ProjectSettings/Packages/com.tutan.messages/MessagesProjectSettings.asset`
-(text format) so they diff cleanly in version control. The page also embeds
-the **Commands authoring view** described below in a foldout — there is no
-separate window.
-
-### Commands authoring view
-
-A static, edit-time audit of the command → handler routing table. Unlike the
-Messages Console (which shows *observed* runtime traffic), this view shows
-what is *declared* in your code, with no play mode required.
-
-It lists every `ICommand` struct found via `TypeCache` as a card and resolves
-its handler(s) through the `ICommandHandler<T>` interface. The command and each
-handler render as clickable `ScriptFileField` rows — single-click pings the
-`.cs` file in the Project window, double-click opens it.
-
-Because commands are **N:1** (exactly one handler each), a card is flagged when
-a command has:
-
-- **no handler** — an *orphan*; nothing handles it, or
-- **more than one** — an N:1 violation; only one handler may be bound.
-
-Toolbar: a name **search**, an **Only warnings** toggle (persisted in
-`EditorPrefs`) to hide healthy commands, and **Refresh** to re-scan on demand
-(the view already re-scans after every recompile / domain reload).
-
-```csharp
-using Tutan.Messages;
-
-// Implementing ICommandHandler<T> makes a handler discoverable by the view.
-public sealed class MovementManager : ICommandHandler<MovePlayer>
-{
-    public void Handle(ref MovePlayer cmd) { /* ... */ }
-}
-```
-
-`ICommandHandler<T>` is **declarative only**. With **Auto-Install Command Bus**
-off, `Handle(ref T)` matches the bus's `MessageHandler<T>` delegate, so you
-bind it at the composition root yourself:
-
-```csharp
-var movement = new MovementManager();
-CommandBus.TryInstall(out var error, r => r.Handle<MovePlayer>(movement.Handle));
-```
-
-With the toggle on, the bootstrap discovers and binds every declared
-`ICommandHandler<T>` automatically; the view then doubles as a sanity check
-for what *will be* installed.
-
----
-
 ## Messages Console
 
 The package ships with an editor window for live introspection of bus traffic:
@@ -119,9 +54,9 @@ buffer is never even allocated. **In release player builds the bus runs
 exactly as before — no branches, no allocations, no buffer.**
 
 In the editor it is always available because `UNITY_EDITOR` is always
-defined. To enable the window in **development builds** (so QA can capture
-on-device), turn on **Enable Instrumentation** in the Messages settings page
-— it writes the `TUTAN_MESSAGES_DEBUG` define to the active build target.
+defined. To compile the hooks into a **development build** (so QA can capture
+on-device), add `TUTAN_MESSAGES_DEBUG` to **Project Settings → Player →
+Scripting Define Symbols** for the target platform.
 
 When the window is closed, `MessagesInstrumentation.Enabled` is set back to
 `false` and every hook short-circuits on the first branch — so even with the

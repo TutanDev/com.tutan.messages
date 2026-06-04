@@ -33,9 +33,9 @@ EventBus.Publish(new PlayerScored { Points = 100, Timestamp = Time.time });
 EventBus.Unsubscribe(token);
 ```
 
-That's it. Open **Project Settings → Tutan → Messages** once and flip
-**Auto-Install Drainers** on — the bus is then drained for you every frame,
-with no prefab to drag into a scene.
+That's it. A hidden `[MessagesHost]` is spawned for you at startup, so the bus
+is drained every frame with no prefab to drag into a scene and nothing to
+configure.
 
 ## Features
 
@@ -43,20 +43,19 @@ with no prefab to drag into a scene.
   multicast delegates, no struct copies.
 - **EventBus (N:M)** for notifications, **CommandBus (N:1)** for intents
   (CQRS-friendly).
-- **Editor tooling** — a live **Messages Console** for bus traffic and a
-  **Project Settings → Tutan → Messages** page that drives the three opt-in
-  scripting defines and embeds a static command → handler audit (flagging any
-  command with zero or multiple handlers).
+- **Editor tooling** — a live **Messages Console** for inspecting bus traffic
+  (subscribe/publish/enqueue/drain records, payloads, and the subscribers
+  frozen at fire time).
 - **Thread-safe `Enqueue`** for network/decode/async callbacks; deferred
   dispatch on the main thread via `DrainQueues()`.
 - **Subscription tokens** — explicit lifecycle, no leaked lambdas, no
   `-=` bugs with closures.
 - **Profiler markers** on every entry point. Visible in Unity Profiler timeline.
-- **Opt-in bootstrap** via `RuntimeInitializeOnLoad`. Toggle
-  **Auto-Install Drainers** and **Auto-Install Command Bus** in the settings
-  page (or set `TUTAN_MESSAGES_AUTOINSTALL_DRAINERS` /
-  `TUTAN_MESSAGES_AUTOINSTALL_COMMANDBUS` directly) to have the host and
-  handlers wired up at startup; leave them off for manual control.
+- **Zero-config draining.** A persistent `[MessagesHost]` is auto-spawned at
+  startup to drain both buses every `LateUpdate`. Define
+  `TUTAN_MESSAGES_NO_AUTO_HOST` to opt out and own the drain loop yourself.
+  Command handlers are bound explicitly at your composition root via
+  `CommandBus.TryInstall`.
 - **Unity 6.0 (6000.1) and newer.** Works on Windows, Mac, Linux, iOS,
   Android, WebGL, all XR platforms (Quest, PCVR, visionOS).
 
@@ -67,11 +66,9 @@ One sample included, importable from the Package Manager:
 - **Basic Publish / Subscribe** — a live score in a self-contained scene. A button
   publishes commands, a background thread enqueues commands off the main thread, and
   the score UI listens for events. Covers the CommandBus (N:1), the EventBus (N:M),
-  auto-install command-bus discovery (handlers bound from their `ICommandHandler<T>`
-  interfaces, no composition-root code), and thread-safe `Enqueue`/drain in one place.
-  Enable **Auto-Install Command Bus** and **Auto-Install Drainers** under
-  **Project Settings → Tutan → Messages**, drop the `BasicPubSubSample` component on a
-  GameObject, and press Play.
+  composition-root handler binding via `CommandBus.TryInstall`, and thread-safe
+  `Enqueue`/drain in one place. Drop the `BasicPubSubSample` component on a
+  GameObject and press Play — no configuration needed.
 
 ## Full documentation
 

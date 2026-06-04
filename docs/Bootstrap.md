@@ -4,62 +4,52 @@
 
 # Bootstrap
 
-Two pieces of startup work are usually needed before the bus is useful:
+Two pieces of startup work are needed before the bus is useful:
 
 1. Something must call `CommandBus.DrainQueues()` and `EventBus.DrainQueues()`
    every frame so enqueued messages get dispatched.
 2. Each command type needs its single handler bound through
    `CommandBus.TryInstall`.
 
-Both are **opt-in** and controlled from **Project Settings → Tutan → Messages**.
-The page writes the matching Scripting Define Symbols to the active build
-target's player settings, so the same toggles apply in builds.
+The first is automatic; the second is one explicit call at your composition root.
 
-## Auto-Install Drainers
+## Queue draining (automatic)
 
-Toggle **Auto-Install Drainers** on (or define
-`TUTAN_MESSAGES_AUTOINSTALL_DRAINERS`) and `MessagesBootstrap` spawns a hidden
-persistent `[MessagesHost]` GameObject at
-`RuntimeInitializeLoadType.BeforeSceneLoad`. The host survives scene loads and
-calls `DrainQueues()` for both buses in `LateUpdate`.
+At startup `MessagesBootstrap` spawns a hidden, persistent `[MessagesHost]`
+GameObject (`RuntimeInitializeLoadType.BeforeSceneLoad`). It survives scene
+loads and calls `DrainQueues()` for both buses every `LateUpdate`. No prefab to
+drag in, no setup.
 
-With the toggle **off**, you are responsible for the equivalent — either
-attach `MessagesHost` to a persistent GameObject yourself, or call
-`CommandBus.DrainQueues()` / `EventBus.DrainQueues()` from your own update
-logic (a PlayerLoop callback, a manager, etc.).
+If you would rather own the drain loop, define `TUTAN_MESSAGES_NO_AUTO_HOST` to
+suppress the auto-spawned host, then either attach `MessagesHost` to a
+persistent GameObject yourself, or call `CommandBus.DrainQueues()` /
+`EventBus.DrainQueues()` from your own update logic (a PlayerLoop callback, a
+manager, etc.).
 
-## Auto-Install Command Bus
+## Binding command handlers (explicit)
 
-Toggle **Auto-Install Command Bus** on (or define
-`TUTAN_MESSAGES_AUTOINSTALL_COMMANDBUS`) and `MessagesBootstrap` runs at
-`RuntimeInitializeLoadType.AfterAssembliesLoaded`:
-
-1. Scans every loaded assembly for concrete, non-generic types implementing
-   `ICommandHandler` with a parameterless constructor.
-2. Instantiates each one.
-3. For every closed `ICommandHandler<T>` interface they implement, binds
-   `instance.Handle` through a single `CommandBus.TryInstall` call.
-
-Skipped types: abstract, interface, open-generic, or no parameterless
-constructor. If two handler types claim the same command, the registry's N:1
-rule turns it into one consolidated error logged at startup — the bus is left
-empty rather than partially installed.
-
-The bundled **Basic Publish / Subscribe** sample relies on this path: its
-`ScoreModel` and `MenuModel` are discovered and bound with no composition-root
-code, which is why the sample needs both this toggle and **Auto-Install
-Drainers** enabled to do anything.
-
-With the toggle **off**, declare bindings at your composition root yourself:
+Command handlers are declared once, at your composition root, through
+`CommandBus.TryInstall`. The N:1 rule is validated there and reported as a return
+value — a duplicate command type or a null handler makes `TryInstall` return
+`false` with an `error` naming the offender, and leaves the live bus untouched.
 
 ```csharp
 var movement = new MovementManager();
 var pools    = new PoolsManager();
 
-CommandBus.TryInstall(out var error, r => r
+bool ok = CommandBus.TryInstall(out var error, r => r
     .Handle<MovePlayer>(movement.Handle)
     .Handle<SpawnEnemy>(pools.Handle));
+
+if (!ok)
+    Debug.LogError(error);
 ```
 
-This is also the right path when handlers need dependencies the discovery scan
-can't supply (database, services, scene refs, etc.).
+A handler is just a method matching `MessageHandler<T>` (`void Handle(ref T)`),
+so any object — a `MonoBehaviour`, a plain C# manager, a service resolved from
+your DI container — can supply one. Because you new them up yourself, handlers
+are free to take whatever dependencies they need (database, services, scene
+refs); there is no discovery scan imposing a parameterless-constructor rule.
+
+Call `TryInstall` again to rebuild the bus from scratch (composition-root
+semantics) — for example after a scene transition that calls `CommandBus.Reset()`.

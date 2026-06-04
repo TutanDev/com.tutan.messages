@@ -8,16 +8,16 @@
 > Subscribe** sample shipped with the package — import it from **Package Manager
 > ▸ Messages ▸ Samples ▸ Import**. It is a self-contained score clicker (one
 > scene, no inspector wiring) where a button and a background thread both drive a
-> single score model through the buses. It relies on the auto-install bootstrap —
-> enable **Auto-Install Command Bus** and **Auto-Install Drainers** under
-> **Project Settings ▸ Tutan ▸ Messages** — so its handlers bind with no
-> composition-root code:
+> single score model through the buses. `BasicPubSubSample` is the composition
+> root: it builds the handlers and binds them with one `CommandBus.TryInstall`
+> call, while queue draining is handled for free by the auto-spawned
+> `[MessagesHost]`:
 >
 > | Sample file | Shows |
 > |---|---|
 > | `ScoreHud` / `MenuHud` | `EventBus.Subscribe`/`Unsubscribe` and publishing commands from a view — [Basic Publish / Subscribe](#basic-publish--subscribe) |
-> | `BasicPubSubSample` | Switching HUDs on `GameStarted`/`GameEnded` events; its command handlers are bound automatically by auto-install, not hand-wired — [Bootstrap](Bootstrap) |
-> | `ScoreModel` / `MenuModel` | A single command handler, discovered via `ICommandHandler<T>`, that re-broadcasts results as events |
+> | `BasicPubSubSample` | The composition root: binds command handlers via `CommandBus.TryInstall` and switches HUDs on `GameStarted`/`GameEnded` events — [Bootstrap](Bootstrap) |
+> | `ScoreModel` / `MenuModel` | A single command handler that re-broadcasts results as events |
 > | `ScoreDecayWorker` | `CommandBus.Enqueue` from a background thread — [Queued Dispatch](#queued-dispatch-from-a-worker-thread) |
 
 ## Basic Publish / Subscribe
@@ -187,11 +187,9 @@ Registering a second handler for the same command type — e.g. two
 `error` that names `PlaceOrder`. The install is atomic, so the previously
 installed handlers are left untouched.
 
-> The bundled sample skips this manual step. With **Auto-Install Command Bus**
-> enabled, its `ScoreModel` and `MenuModel` are discovered from their
-> `ICommandHandler<T>` interfaces and bound through one `TryInstall` for you —
-> see [Bootstrap](Bootstrap). Reach for the explicit call above when a handler
-> needs dependencies the discovery scan can't supply.
+> The bundled sample does exactly this: `BasicPubSubSample.Awake` news up
+> `ScoreModel` and `MenuModel` and binds `AdjustScore`, `ResetScore`, and
+> `StartGame` through one `TryInstall` call — see [Bootstrap](Bootstrap).
 
 ## Scene Transition Cleanup
 

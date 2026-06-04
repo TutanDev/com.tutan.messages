@@ -1,6 +1,6 @@
 namespace Tutan.Messages.Samples.BasicPubSub
 {
-    public sealed class MenuModel : ICommandHandler<StartGame>
+    public sealed class MenuModel
     {
         /// <summary>Handles <see cref="StartGame"/>. Always invoked on the main thread
         /// (the bus drains queued commands in <c>LateUpdate</c>), so publishing an event
