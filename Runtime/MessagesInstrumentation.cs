@@ -97,9 +97,6 @@ namespace Tutan.Messages
         /// <summary>Master toggle. When false, every Record* call returns immediately.</summary>
         public static bool Enabled;
 
-        /// <summary>When true, Publish/Enqueue records box the struct payload into <see cref="Record.PayloadBox"/>. Otherwise null.</summary>
-        public static bool CapturePayloads;
-
         /// <summary>When true, <see cref="Op.DrainStart"/> / <see cref="Op.DrainEnd"/> are appended to the buffer. Off by default — drains fire every frame and would flood the ring buffer.</summary>
         public static bool RecordDrains;
 
@@ -169,7 +166,7 @@ namespace Tutan.Messages
         internal static void RecordPublish<T>(BusKind bus, ref T message, ChannelBase channel) where T : unmanaged, IMessage
         {
             if (!Enabled) return;
-            object payload = CapturePayloads ? (object)message : null;
+            object payload =  message;
             Append(new Record(
                 DateTime.UtcNow.Ticks, CurrentFrame, Thread.CurrentThread.ManagedThreadId,
                 bus, Op.Publish, typeof(T), 0, payload, null, null, CaptureSubscribers(channel)));
@@ -179,7 +176,7 @@ namespace Tutan.Messages
         internal static void RecordEnqueue<T>(BusKind bus, in T message, ChannelBase channel) where T : unmanaged, IMessage
         {
             if (!Enabled) return;
-            object payload = CapturePayloads ? (object)message : null;
+            object payload = message;
             Append(new Record(
                 DateTime.UtcNow.Ticks, CurrentFrame, Thread.CurrentThread.ManagedThreadId,
                 bus, Op.Enqueue, typeof(T), 0, payload, null, null, CaptureSubscribers(channel)));

@@ -18,14 +18,12 @@ namespace Tutan.Messages.Tests
             CommandBus.Reset();
             MessagesInstrumentation.Clear();
             MessagesInstrumentation.Enabled = true;
-            MessagesInstrumentation.CapturePayloads = false;
         }
 
         [TearDown]
         public void TearDown()
         {
             MessagesInstrumentation.Enabled = false;
-            MessagesInstrumentation.CapturePayloads = false;
             MessagesInstrumentation.Clear();
             EventBus.Reset();
             CommandBus.Reset();
@@ -48,7 +46,6 @@ namespace Tutan.Messages.Tests
         {
             EventBus.Subscribe<Ping>((ref Ping p) => { });
 
-            MessagesInstrumentation.CapturePayloads = true;
             EventBus.Publish(new Ping { Value = 11 });
 
             var rec = MessagesInstrumentation.Snapshot()

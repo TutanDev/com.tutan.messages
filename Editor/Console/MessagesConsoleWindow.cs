@@ -118,7 +118,6 @@ namespace Tutan.Messages.Editor
             _showSubs = EditorPrefs.GetBool(KeySubs, true);
             _showDrains = EditorPrefs.GetBool(KeyDrains, false);
             _autoScroll = EditorPrefs.GetBool(KeyAutoScroll, true);
-            MessagesInstrumentation.CapturePayloads = true;
             MessagesInstrumentation.RecordDrains = _showDrains;
         }
 

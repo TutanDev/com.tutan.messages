@@ -155,8 +155,7 @@ namespace Tutan.Messages
 
             Entries.RemoveAll(static e => !e.Active);
             _dirtyCount = 0;
-            Debug.Assert(_activeCount == Entries.Count,
-                "Messages: _activeCount desynced after compaction.");
+            Debug.Assert(_activeCount == Entries.Count, "Messages: _activeCount desynced after compaction.");
         }
     }
 
