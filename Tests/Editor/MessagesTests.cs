@@ -23,10 +23,11 @@ namespace Tutan.Messages.Tests
         public void Install_ThenPublish_DeliversMessageToHandler()
         {
             int received = -1;
-            bool ok = CommandBus.TryInstall(out var error,
+            var result = CommandBus.Install(
                 r => r.Handle<MovePlayer>((ref MovePlayer m) => received = m.Value));
 
-            Assert.IsTrue(ok, error);
+            Assert.IsTrue(result.Ok, result.Error);
+            Assert.AreEqual(1, result.HandlerCount);
             CommandBus.Publish(new MovePlayer { Value = 42 });
 
             Assert.AreEqual(42, received);
@@ -36,7 +37,7 @@ namespace Tutan.Messages.Tests
         public void Install_ThenEnqueueDrain_DeliversMessage()
         {
             int received = -1;
-            CommandBus.TryInstall(out _,
+            CommandBus.Install(
                 r => r.Handle<MovePlayer>((ref MovePlayer m) => received = m.Value));
 
             CommandBus.Enqueue(new MovePlayer { Value = 99 });
@@ -50,12 +51,13 @@ namespace Tutan.Messages.Tests
         public void DuplicateHandler_FailsInstall_NoThrow()
         {
             // Two handlers for the same command type — reported, not thrown.
-            bool ok = CommandBus.TryInstall(out var error, r => r
+            var result = CommandBus.Install(r => r
                 .Handle<PlaceOrder>((ref PlaceOrder m) => { })
                 .Handle<PlaceOrder>((ref PlaceOrder m) => { }));
 
-            Assert.IsFalse(ok);
-            StringAssert.Contains(nameof(PlaceOrder), error);
+            Assert.IsFalse(result.Ok);
+            Assert.AreEqual(0, result.HandlerCount);
+            StringAssert.Contains(nameof(PlaceOrder), result.Error);
             // Atomic: a failed install leaves the live bus untouched.
             Assert.AreEqual(0, CommandBus.GetSubscriberCount<PlaceOrder>());
         }
@@ -63,11 +65,11 @@ namespace Tutan.Messages.Tests
         [Test]
         public void NullHandler_FailsInstall()
         {
-            bool ok = CommandBus.TryInstall(out var error,
+            var result = CommandBus.Install(
                 r => r.Handle<MovePlayer>(null));
 
-            Assert.IsFalse(ok);
-            StringAssert.Contains(nameof(MovePlayer), error);
+            Assert.IsFalse(result.Ok);
+            StringAssert.Contains(nameof(MovePlayer), result.Error);
             Assert.AreEqual(0, CommandBus.GetSubscriberCount<MovePlayer>());
         }
 
@@ -75,8 +77,8 @@ namespace Tutan.Messages.Tests
         public void Reinstall_ReplacesPreviousHandlers()
         {
             int first = 0, second = 0;
-            CommandBus.TryInstall(out _, r => r.Handle<MovePlayer>((ref MovePlayer m) => first++));
-            CommandBus.TryInstall(out _, r => r.Handle<MovePlayer>((ref MovePlayer m) => second++));
+            CommandBus.Install(r => r.Handle<MovePlayer>((ref MovePlayer m) => first++));
+            CommandBus.Install(r => r.Handle<MovePlayer>((ref MovePlayer m) => second++));
 
             CommandBus.Publish(new MovePlayer { Value = 1 });
 
@@ -88,7 +90,7 @@ namespace Tutan.Messages.Tests
         public void Reset_RemovesHandlers()
         {
             int callCount = 0;
-            CommandBus.TryInstall(out _, r => r.Handle<MovePlayer>((ref MovePlayer m) => callCount++));
+            CommandBus.Install(r => r.Handle<MovePlayer>((ref MovePlayer m) => callCount++));
 
             CommandBus.Reset();
             CommandBus.Publish(new MovePlayer { Value = 1 });
@@ -126,10 +128,10 @@ namespace Tutan.Messages.Tests
         public void UnsubscribeDuringDispatch_DoesNotCorruptIteration()
         {
             int bCallCount = 0;
-            SubscriptionToken tokenA = default;
-            tokenA = EventBus.Subscribe<PlayerMoved>((ref PlayerMoved m) =>
+            Subscription subA = default;
+            subA = EventBus.Subscribe<PlayerMoved>((ref PlayerMoved m) =>
             {
-                EventBus.Unsubscribe(tokenA);
+                subA.Dispose();
             });
             EventBus.Subscribe<PlayerMoved>((ref PlayerMoved m) => bCallCount++);
 
@@ -163,17 +165,6 @@ namespace Tutan.Messages.Tests
             Assert.AreEqual(0, callCount);
         }
 
-        [Test]
-        public void DoubleUnsubscribe_ReturnsFalse_NoException()
-        {
-            var token = EventBus.Subscribe<PlayerMoved>((ref PlayerMoved m) => { });
-
-            bool first  = EventBus.Unsubscribe(token);
-            bool second = EventBus.Unsubscribe(token);
-
-            Assert.IsTrue(first);
-            Assert.IsFalse(second);
-        }
     }
 
     // ── SubscriptionTokenTests ───────────────────────────────────────────
@@ -243,6 +234,40 @@ namespace Tutan.Messages.Tests
             EventBus.DrainQueues(); // final flush
 
             Assert.AreEqual(iterations, received);
+        }
+
+        [Test]
+        public void Enqueue_FirstUseOfChannel_FromManyThreadsAtOnce_DropsNoMessages()
+        {
+            // Regression: pre-0.14, the per-channel queue was lazily created with
+            // a non-atomic `??=`. Threads racing on the FIRST Enqueue of a type
+            // could each create a queue, losing the loser's message. The race only
+            // exists at channel-queue birth, so reset and re-race many times.
+            const int threads = 4;
+            const int iterations = 200;
+
+            for (int iter = 0; iter < iterations; iter++)
+            {
+                EventBus.Reset();
+                int received = 0;
+                EventBus.Subscribe<ConcurrentMsg>((ref ConcurrentMsg m) => received++);
+
+                using var barrier = new Barrier(threads);
+                var tasks = new Task[threads];
+                for (int t = 0; t < threads; t++)
+                {
+                    tasks[t] = Task.Run(() =>
+                    {
+                        barrier.SignalAndWait();
+                        EventBus.Enqueue(new ConcurrentMsg { Value = 1 });
+                    });
+                }
+
+                Task.WaitAll(tasks);
+                EventBus.DrainQueues();
+
+                Assert.AreEqual(threads, received, $"Iteration {iter}: a first-enqueue message was lost.");
+            }
         }
     }
 

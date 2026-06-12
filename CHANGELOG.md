@@ -2,6 +2,187 @@
 
 All notable changes to `com.tutan.messages` will be documented in this file.
 
+## [1.1.0] - 2026-06-12
+
+### Changed
+- **BREAKING — `CommandBus.TryInstall(out string error, configure)` is replaced
+  by `CommandBus.Install(configure)`, which returns an `InstallResult`.** The
+  out-parameter-before-lambda signature made call sites awkward; the result
+  struct keeps the no-throw contract and reads top-to-bottom:
+
+  ```csharp
+  var result = CommandBus.Install(r => r
+      .Handle<PlaceOrder>(orderHandler.Handle)
+      .Handle<MovePlayer>(movement.Handle));
+
+  if (!result.Ok) Debug.LogError(result.Error);
+  ```
+
+  **`InstallResult`** is a readonly struct: `Ok` (bindings validated and swapped
+  in atomically), `Error` (names the offending command type(s); null on
+  success), and `HandlerCount` (number of handlers bound; 0 on failure).
+  Semantics are unchanged — validation failures are reported as values, never
+  exceptions; a failed install leaves the live bus untouched; calling again
+  rebuilds the bus wholesale.
+
+  **Migration:** `bool ok = CommandBus.TryInstall(out var error, r => ...)`
+  becomes `var result = CommandBus.Install(r => ...)`; replace `ok` with
+  `result.Ok` and `error` with `result.Error`. The `configure` callback and
+  `CommandRegistry.Handle<T>` are unchanged.
+
+## [1.0.2] - 2026-06-12
+
+### Fixed
+- **`DrainQueues` no longer allocates every frame.** Draining enumerated the
+  channel `ConcurrentDictionary` directly, which allocates a class enumerator
+  per call — with the auto-host that was two small heap allocations every
+  frame, contradicting the zero-GC contract. Channels are now drained from a
+  cached list that is rebuilt only when the channel set changes.
+- **Subscription-list compaction heuristic was inverted.** The intent was to
+  compact when at least 4 entries are dead *and* they make up a quarter of the
+  list; the condition used `&&` in the skip branch, so a large list compacted
+  (an O(n) sweep) after every 4 unsubscribes regardless of size. Mass
+  unsubscription on big channels no longer pays repeated full-list sweeps.
+- **Dispatch depth is now restored in a `finally`.** An exception escaping
+  `Channel<T>.Publish` outside the per-handler catch would have left the
+  re-entrancy counter stuck above zero, permanently disabling compaction for
+  that channel.
+
+### Changed
+- `EventBus.Publish<T>(T)` / `CommandBus.Publish<T>(T)` forward by `ref` to the
+  underlying bus, saving one of the two struct copies the by-value convenience
+  overload used to make.
+- `Channel<T>.DrainQueue` checks `ConcurrentQueue.IsEmpty` (O(1)) before
+  `Count` (a cross-segment snapshot), so idle channels pay almost nothing
+  per frame.
+- Instrumentation: the `TotalEver` counter is incremented inside the ring-buffer
+  lock, so the Messages Console's incremental catch-up can no longer observe a
+  total ahead of the buffer contents (which could skip or duplicate records in
+  the log view).
+
+## [1.0.1] - 2026-06-12
+
+### Docs
+- **Stopped prescribing `Reset()` for scene transitions.** Whether (and when) to
+  reset the buses across scene loads depends on the app's scene architecture —
+  additive scenes, persistent managers, and DontDestroyOnLoad roots all want
+  different lifetimes. The docs now document `Reset()` as a test-teardown tool
+  and leave scene-lifecycle policy to the user: removed the "Scene Transition
+  Cleanup" example (`docs/Examples.md`), the scene-transition framing in
+  `docs/Bootstrap.md`, `docs/Threading.md`, `docs/API-Reference.md`, and the
+  `EventBus.Reset`/`CommandBus.Reset` doc comments. Behavior is unchanged.
+- Removed a stale reference to `decisions/CommandBus.md` from
+  `docs/API-Reference.md` — the decisions folder is not shipped with the package.
+
+## [1.0.0] - 2026-06-12
+
+First stable release. Hardening pass over the runtime, editor tooling, and docs
+ahead of the Asset Store submission — no breaking API changes since 0.14.0.
+
+### Fixed
+- **The auto-spawned `[MessagesHost]` no longer leaks across editor play
+  sessions.** It was created with `HideFlags.HideAndDontSave`, which excludes an
+  object from the editor's play-mode cleanup — each play session left another
+  hidden host behind. It now uses `HideFlags.HideInHierarchy` only
+  (`DontDestroyOnLoad` already provides scene persistence).
+- **Duplicate `MessagesHost` instances are rejected.** If a host is already
+  active (e.g. a manually placed one coexisting with the auto-spawned one), the
+  newcomer logs a warning and destroys itself, so the buses are drained exactly
+  once per frame.
+- **Message-type dropdowns (`EventReference`/`CommandReference`,
+  `[EventType]`/`[CommandType]`) mis-mapped duplicate type names.** Two message
+  structs with the same name in different namespaces rendered as identical
+  entries, and picking the second silently stored the first. The popups are now
+  index-based, and colliding names are shown fully qualified.
+
+### Added
+- **Main-thread guard in editor and development builds.** `Publish`,
+  `Subscribe`, `Subscription.Dispose`, and `DrainQueues` now log an error when
+  called off the main thread (the classic `async` continuation mistake) instead
+  of silently corrupting the subscription list. The check is `[Conditional]` —
+  release player builds strip it entirely.
+- **`DrainQueues` is bounded per frame.** A drain processes at most the
+  messages that were pending when it started; a handler that enqueues the same
+  message type during dispatch extends the next frame's drain instead of the
+  current one, so a self-perpetuating handler can no longer hang the frame.
+  Documented in `docs/EdgeCases.md`.
+
+### Changed
+- `EventBus`/`CommandBus` hold their bus instance in a `volatile` field so a
+  bus swapped in by `Reset()`/`TryInstall` is promptly visible to worker
+  threads using `Enqueue`. `docs/Threading.md` now also documents the one
+  thread-safety carve-out: an `Enqueue` racing a `Reset()`/`TryInstall` swap
+  can land in the discarded bus — quiesce workers before resetting.
+
+### Docs
+- Removed the stale `MessagesInstrumentation.CapturePayloads` reference from
+  `docs/Editor.md` — the field no longer exists; payload capture is automatic
+  whenever instrumentation is enabled.
+- Documented that structs authored through `EventReference`/`CommandReference`
+  must be `[Serializable]` (the payload round-trips through `JsonUtility`).
+- Sample: clarified the intended scoring — the final score is the fatal decay
+  tick, which grows the longer you survive (`ScoreModel`/`MenuHud` comments,
+  sample `README`); renamed the misleading `DecayPerSecond` field to
+  `_nextDecayDelta`; corrected the stale "UI built entirely in code" comment
+  and the package `README`'s "drop the component on a GameObject" instruction
+  (the sample is scene-based).
+- `package.json` description updated — it still advertised the
+  pre-0.14.0 "integer subscription tokens".
+- Fixed `Runtime/IMessage.cs` source encoding (Windows-1252 em-dashes rendered
+  as `�`); the file is now UTF-8.
+
+## [0.14.0] - 2026-06-12
+
+### Fixed
+- **Worker threads racing on the first `Enqueue` of a message type could lose a
+  message.** The per-channel pending queue was lazily created with a non-atomic
+  `??=`; two threads observing it as null would each create a queue, and the
+  loser's message landed in a queue that was immediately overwritten. The lazy
+  init is now an `Interlocked.CompareExchange`, and `DrainQueue` reads the queue
+  field with `Volatile.Read` so a queue created on a worker thread is visible to
+  the main thread no later than the next frame's drain. Covered by a new
+  multi-thread first-enqueue stress test.
+
+### Changed
+- **BREAKING — `Subscribe` now returns a disposable `Subscription` instead of a
+  `SubscriptionToken`, and disposal is the one way to unsubscribe.**
+  `EventBus.Unsubscribe(token)` / `MessageBus<TBase>.Unsubscribe(token)` are no
+  longer public, and `SubscriptionToken` is now internal (it survives as the
+  handle's identity). One subscribe method, one handle type — no parallel
+  token/scoped APIs. `CommandBus` is unaffected (its handlers are bound via
+  `TryInstall`).
+
+  **`Subscription`** is an `IDisposable` struct pairing the subscription's
+  identity with the bus instance that issued it. `Dispose()` unsubscribes; it
+  is idempotent, safe during dispatch, and a harmless no-op after the issuing
+  bus was `Reset()` (it can never remove an unrelated subscription from the
+  replacement bus). Zero allocation beyond `Subscribe` itself.
+
+  **Migration:** `SubscriptionToken _token` fields become `Subscription
+  _subscription`; `EventBus.Unsubscribe(_token)` becomes
+  `_subscription.Dispose()`. Subscriptions that live as long as their component
+  can drop the field entirely — see `AddTo` below.
+
+### Added
+- **Subscription lifetime helpers** for the new handle:
+  - **`SubscriptionBag`** — collects subscriptions and disposes them as a group
+    (`Dispose()`/`Clear()`); reusable after disposal. One bag per system instead
+    of one handle field per subscription.
+  - **`AddTo(...)`** fluent extensions — `AddTo(bag)`, `AddTo(gameObject)`, and
+    `AddTo(component)` tie a subscription to a bag or to a GameObject's
+    lifetime. The GameObject overloads attach one hidden **`SubscriptionAnchor`**
+    component that disposes its bag in `OnDestroy`, so a MonoBehaviour
+    subscription becomes one line:
+    `EventBus.Subscribe<PlayerMoved>(OnMoved).AddTo(this);` — no handle field,
+    no `OnDestroy` override.
+- Docs: `README` quick start and features, `docs/API-Reference.md` (new
+  **Subscription Lifetime** section), and `docs/Examples.md` (new
+  **Subscription Lifetimes** example) cover the new surface; the **Basic
+  Publish / Subscribe** sample now uses `.AddTo(this)` (composition root) and an
+  explicit `Dispose` in `OnDisable` (`ScoreHud`). `docs/Threading.md` diagram
+  updated to the actual `GetOrAdd` + CAS enqueue path (it still showed the
+  pre-0.3.0 `lock(_queueLock)` design).
+
 ## [0.13.0] - 2026-06-05
 
 ### Removed

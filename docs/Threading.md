@@ -10,12 +10,12 @@
       │                          │
   Enqueue(msg)              LateUpdate()
       │                          │
- lock(_queueLock)           DrainQueues()
-  GetOrCreate channel            │
- release lock                    │
-      │                     channel.DrainQueue()
-  ConcurrentQueue.Enqueue        │
-                            ConcurrentQueue.TryDequeue
+ GetOrAdd channel           DrainQueues()
+ (ConcurrentDictionary)          │
+      │                          │
+ CAS-init pending queue     channel.DrainQueue()
+      │                          │
+  ConcurrentQueue.Enqueue   ConcurrentQueue.TryDequeue
                                  │
                             Publish(ref msg)  ◄── synchronous dispatch
                                  │
@@ -24,11 +24,21 @@
                             ...
 ```
 
-- `Publish`, `Subscribe`, `Unsubscribe`, `DrainQueues` — **main thread only**.
-  Lock-free reads via `ConcurrentDictionary<Type, ChannelBase>`.
+- `Publish`, `Subscribe`, `Subscription.Dispose`, `DrainQueues` — **main thread only**.
+  Lock-free reads via `ConcurrentDictionary<Type, ChannelBase>`. In the editor
+  and in development builds, calling one of these from a worker thread logs an
+  error naming the offending call; in release builds the check is compiled out.
 - `Enqueue` — **thread-safe**. Channel lookup/creation goes through
-  `ConcurrentDictionary.GetOrAdd`; the message itself lands in a per-channel
-  `ConcurrentQueue<T>`. Safe to race against any main-thread call.
+  `ConcurrentDictionary.GetOrAdd`, the per-channel pending queue is lazily
+  created with an `Interlocked.CompareExchange`, and the message itself lands
+  in a `ConcurrentQueue<T>`. Safe to race against any main-thread call and
+  against concurrent `Enqueue` calls from other threads — including the very
+  first `Enqueue` of a message type.
+- **One exception:** `Reset()` (and `CommandBus.Install`) replaces the bus
+  instance wholesale. A worker-thread `Enqueue` racing that swap can land its
+  message in the discarded bus, where it is dropped along with the rest of the
+  cleared state. Quiesce worker threads before resetting or re-installing —
+  both are composition-root operations, not steady-state ones.
 
 If you need to react to a worker-thread event on the main thread, the rule is
 simple: **`Enqueue` from the worker, subscribe normally on the main thread,

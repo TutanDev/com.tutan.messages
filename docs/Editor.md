@@ -70,13 +70,16 @@ diagnostics or in-game overlays:
 
 ```csharp
 MessagesInstrumentation.Enabled = true;
-MessagesInstrumentation.CapturePayloads = true;
 
 // Snapshot the ring buffer (allocates a copy; do it off the hot path).
 var records = MessagesInstrumentation.Snapshot();
 foreach (var r in records)
     Debug.Log($"{r.Bus} {r.Op} {r.MessageType?.Name}");
 ```
+
+Payload capture is not a separate switch: while `Enabled` is `true`, every
+`Publish`/`Enqueue` record carries the boxed payload (one boxing allocation
+per record); with `Enabled` false there is no cost at all.
 
 ---
 
@@ -118,6 +121,12 @@ In the Inspector you get a type dropdown, a reflection-based field editor
 for the struct's public fields, and a small **▶** button that synthesizes
 and publishes the message immediately — handy for poking subscribers without
 entering play mode logic.
+
+> **Mark referenced structs `[Serializable]`.** The payload round-trips
+> through `JsonUtility`, which only serializes plain structs that carry the
+> `[Serializable]` attribute. A message struct without it still works on the
+> bus, but its payload cannot be edited through a reference — the values
+> silently stay at their defaults.
 
 ### `[EventType]` / `[CommandType]` attributes
 

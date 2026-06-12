@@ -6,9 +6,10 @@ namespace Tutan.Messages.Samples.BasicPubSub
     // ── Off-thread publisher ─────────────────────────────────────────────
 
     /// <summary>
-    /// A background thread that drains the score by one point every second to
-    /// simulate decay (a timer, network tick, simulation step — anything that does
-    /// not live on the main thread).
+    /// A background thread that drains the score every second, one point more each
+    /// tick (-1, -2, -3, …) so the pressure ramps up the longer the game runs. It
+    /// stands in for anything that does not live on the main thread — a timer,
+    /// network tick, simulation step.
     /// <para>
     /// It cannot call <see cref="CommandBus.Publish"/> — that is main-thread only.
     /// Instead it uses <see cref="CommandBus.Enqueue"/>, which is thread-safe. The
@@ -24,7 +25,8 @@ namespace Tutan.Messages.Samples.BasicPubSub
     /// </summary>
     public sealed class ScoreDecayWorker : MonoBehaviour
     {
-        int DecayPerSecond = -1;
+        // Grows (more negative) by one each tick — the decay accelerates over time.
+        int _nextDecayDelta = -1;
 
         Thread _thread;
         volatile bool _running;
@@ -61,7 +63,7 @@ namespace Tutan.Messages.Samples.BasicPubSub
                 elapsed = 0;
 
                 // Thread-safe hand-off. Dispatched on the main thread next frame.
-                CommandBus.Enqueue(new AdjustScore { Delta = DecayPerSecond-- });
+                CommandBus.Enqueue(new AdjustScore { Delta = _nextDecayDelta-- });
             }
         }
     }

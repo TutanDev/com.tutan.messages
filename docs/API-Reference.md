@@ -6,30 +6,22 @@
 
 The dispatch methods — `Publish`, `Enqueue`, `DrainQueues` — are identical
 across `EventBus` and `CommandBus` (and the underlying `MessageBus<TBase>`
-instance they wrap). The buses differ only in how handlers are registered: `EventBus` is a
-mutable N:M bus you `Subscribe`/`Unsubscribe` at any time, while `CommandBus`
-handlers are declared once at the composition root via `TryInstall` — see
+instance they wrap). The buses differ only in how handlers are registered:
+`EventBus` is a mutable N:M bus you subscribe to at any time (and unsubscribe
+by disposing the returned `Subscription`), while `CommandBus` handlers are
+declared once at the composition root via `Install` — see
 [CommandBus](#commandbus).
 
 ## Subscribe (EventBus)
 
 ```csharp
-SubscriptionToken Subscribe<T>(MessageHandler<T> handler) where T : unmanaged, IMessage
+Subscription Subscribe<T>(MessageHandler<T> handler) where T : unmanaged, IMessage
 ```
 
-Registers `handler` for messages of type `T`. Returns a token for later
-unsubscription. Main thread only. `EventBus` only — for commands, see
+Registers `handler` for messages of type `T`. Returns a disposable
+[`Subscription`](#subscription-lifetime) — disposing it is how you
+unsubscribe. Main thread only. `EventBus` only — for commands, see
 [CommandBus](#commandbus).
-
-## Unsubscribe (EventBus)
-
-```csharp
-bool Unsubscribe(SubscriptionToken token)
-```
-
-Removes the subscription identified by `token`. Returns `false` if already
-unsubscribed or invalid. Safe to call during dispatch — the handler is
-marked inactive and skipped for the remainder of the current dispatch cycle.
 
 ## Publish (Immediate)
 
@@ -54,9 +46,10 @@ void Enqueue<T>(in T message) where T : unmanaged, IMessage
 
 Adds `message` to the internal queue for type `T`. Thread-safe via
 `ConcurrentDictionary` + `ConcurrentQueue`; safe to race with main-thread
-`Subscribe`/`Publish`/`DrainQueues`. Channel creation uses a brief lock; the
-enqueue itself is lock-free (`ConcurrentQueue<T>`). Messages are dispatched
-on the next `DrainQueues()` call.
+`Subscribe`/`Publish`/`DrainQueues` *and* with concurrent `Enqueue` calls from
+other worker threads (channel creation goes through `GetOrAdd`; the per-channel
+queue's lazy creation is a compare-and-swap). Messages are dispatched on the
+next `DrainQueues()` call.
 
 ## DrainQueues
 
@@ -67,6 +60,48 @@ void DrainQueues()
 Processes all pending queued messages across all channels. Call once per
 frame. Main thread only. By default `MessagesHost` does this for you — see
 [Bootstrap](Bootstrap).
+
+## Subscription Lifetime
+
+```csharp
+struct Subscription : IDisposable        // Dispose() unsubscribes; idempotent
+class  SubscriptionBag : IDisposable     // Dispose() unsubscribes everything Added
+Subscription AddTo(this Subscription, SubscriptionBag bag)
+Subscription AddTo(this Subscription, GameObject gameObject)  // dies with the GameObject
+Subscription AddTo(this Subscription, Component component)    // dies with its GameObject
+```
+
+`Subscribe` returns a `Subscription` — a disposable struct pairing the
+subscription's identity with the bus instance that issued it. Disposing it
+unsubscribes. Three ways to manage that:
+
+- **Hold it and dispose explicitly** — for dynamic lifetimes (e.g. a view that
+  subscribes in `OnEnable` and unsubscribes in `OnDisable`).
+- **Collect several in a `SubscriptionBag`** — one `Dispose()` releases the
+  group; the bag is reusable afterward.
+- **Tie it to a GameObject** with `.AddTo(this)` — disposal happens in
+  `OnDestroy` via one hidden `SubscriptionAnchor` component per GameObject, so
+  the common MonoBehaviour pattern collapses to:
+
+```csharp
+void Awake()
+{
+    EventBus.Subscribe<PlayerMoved>(OnMoved).AddTo(this);
+}
+```
+
+No handle field, no `OnDestroy`. Details and trade-offs in
+[Examples](Examples#subscription-lifetimes). Notes:
+
+- `Subscription` is a struct around an id plus an existing reference —
+  `Subscribe` allocates nothing beyond the handler entry itself. The bag and
+  the anchor component each allocate once at creation.
+- Because the handle captures the bus *instance*, disposing a `Subscription`
+  taken before a `Reset()` is a no-op — it can never remove an unrelated
+  subscription on the replacement bus.
+- `Dispose` is main thread only, safe to call during dispatch (the handler is
+  marked inactive and skipped for the remainder of the current dispatch
+  cycle), and idempotent.
 
 ## Diagnostics
 
@@ -79,17 +114,26 @@ int ChannelCount { get; }
 
 `CommandBus` shares `Publish`, `Enqueue`, `DrainQueues`, `Reset`,
 `GetSubscriberCount<T>`, and `ChannelCount` with `EventBus`. It has **no**
-`Subscribe`/`Unsubscribe`. The single handler for each command type is declared
+`Subscribe`. The single handler for each command type is declared
 once at the composition root:
 
 ```csharp
-bool TryInstall(out string error, Action<CommandRegistry> configure)
+InstallResult Install(Action<CommandRegistry> configure)
 ```
 
-Returns `true` and atomically swaps in the new bindings on success. On a
-duplicate command type or a null handler it returns `false`, sets `error` to a
-message naming the offending type(s), and leaves the live bus untouched. Calling
-it again rebuilds the bus from scratch (composition-root semantics).
+On success the new bindings are swapped in atomically. On a duplicate command
+type or a null handler the live bus is left untouched and the failure is
+reported in the result — never as an exception. Calling it again rebuilds the
+bus from scratch (composition-root semantics).
+
+```csharp
+readonly struct InstallResult
+{
+    bool   Ok           // true when the bindings were validated and swapped in
+    string Error        // names the offending command type(s); null when Ok
+    int    HandlerCount // number of handlers bound; 0 on failure
+}
+```
 
 Inside the callback, bind each command with the `CommandRegistry` builder:
 
@@ -98,21 +142,21 @@ CommandRegistry Handle<T>(MessageHandler<T> handler) where T : unmanaged, IComma
 ```
 
 ```csharp
-bool ok = CommandBus.TryInstall(out string error, r => r
+var result = CommandBus.Install(r => r
     .Handle<PlaceOrder>(orderHandler.Handle)
     .Handle<MovePlayer>(movement.Handle));
 
-if (!ok) Debug.LogError(error); // names the offending command type(s)
+if (!result.Ok) Debug.LogError(result.Error); // names the offending command type(s)
 ```
 
 For multi-app builds that vary by feature set or backend, express that variation at the
 composition root: select which handlers to bind and which backend to inject into them,
-then funnel them all through one `TryInstall`. See `decisions/CommandBus.md`.
+then funnel them all through one `Install`.
 
 ## Lifecycle
 
 ```csharp
-void Reset()    // Clears all subscriptions and queues. Use on scene transitions or test teardown.
+void Reset()    // Clears all subscriptions and queues. Use on test teardown.
 ```
 
 ---

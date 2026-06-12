@@ -14,7 +14,7 @@ namespace Tutan.Messages.Samples.BasicPubSub
     /// <para>
     /// Its <c>Handle(ref T)</c> methods match the bus's <c>MessageHandler&lt;T&gt;</c>
     /// delegate, so <see cref="BasicPubSubSample"/> binds them as this command's single
-    /// handler at the composition root through <see cref="CommandBus.TryInstall"/>.
+    /// handler at the composition root through <see cref="CommandBus.Install"/>.
     /// </para>
     /// </summary>
     public sealed class ScoreModel
@@ -32,8 +32,9 @@ namespace Tutan.Messages.Samples.BasicPubSub
 
             if (newTotal < 0)
             {
-                // Game over. Report the score the player finished with (before the fatal
-                // tick), not the delta that pushed it under.
+                // Game over. The final score is the fatal decay tick itself: the decay
+                // grows every second, so the longer the player survived, the bigger the
+                // delta that ended the run — survival time is the score.
                 EventBus.Publish(new GameEnded { FinalScore = cmd.Delta });
             }
             else

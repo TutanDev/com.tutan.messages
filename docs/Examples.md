@@ -9,14 +9,14 @@
 > ▸ Messages ▸ Samples ▸ Import**. It is a self-contained score clicker (one
 > scene, no inspector wiring) where a button and a background thread both drive a
 > single score model through the buses. `BasicPubSubSample` is the composition
-> root: it builds the handlers and binds them with one `CommandBus.TryInstall`
+> root: it builds the handlers and binds them with one `CommandBus.Install`
 > call, while queue draining is handled for free by the auto-spawned
 > `[MessagesHost]`:
 >
 > | Sample file | Shows |
 > |---|---|
-> | `ScoreHud` / `MenuHud` | `EventBus.Subscribe`/`Unsubscribe` and publishing commands from a view — [Basic Publish / Subscribe](#basic-publish--subscribe) |
-> | `BasicPubSubSample` | The composition root: binds command handlers via `CommandBus.TryInstall` and switches HUDs on `GameStarted`/`GameEnded` events — [Bootstrap](Bootstrap) |
+> | `ScoreHud` / `MenuHud` | `EventBus.Subscribe` / `Subscription.Dispose` and publishing commands from a view — [Basic Publish / Subscribe](#basic-publish--subscribe) |
+> | `BasicPubSubSample` | The composition root: binds command handlers via `CommandBus.Install` and switches HUDs on `GameStarted`/`GameEnded` events — [Bootstrap](Bootstrap) |
 > | `ScoreModel` / `MenuModel` | A single command handler that re-broadcasts results as events |
 > | `ScoreDecayWorker` | `CommandBus.Enqueue` from a background thread — [Queued Dispatch](#queued-dispatch-from-a-worker-thread) |
 
@@ -37,16 +37,16 @@ public struct PlayerTeleported : IEvent
 // ── Subscriber ────────────────────────────────────────────────────
 public class FadeController : MonoBehaviour
 {
-    SubscriptionToken _token;
+    Subscription _subscription;
 
     void OnEnable()
     {
-        _token = EventBus.Subscribe<PlayerTeleported>(OnTeleported);
+        _subscription = EventBus.Subscribe<PlayerTeleported>(OnTeleported);
     }
 
     void OnDisable()
     {
-        EventBus.Unsubscribe(_token);
+        _subscription.Dispose();
     }
 
     void OnTeleported(ref PlayerTeleported msg)
@@ -77,6 +77,56 @@ public class TeleportSystem : MonoBehaviour
 `TeleportAudioHandler`, a `TeleportAnalyticsLogger`, or remove `FadeController`
 entirely, `TeleportSystem` does not change. That is the decoupling the bus
 provides.
+
+## Subscription Lifetimes
+
+The handle field + `OnDisable` pair above is the explicit form — right when the
+subscription toggles with the component. When a subscription should simply live
+and die with the component, skip the bookkeeping entirely: `.AddTo(this)` ties
+the `Subscription` to the GameObject, and it is disposed automatically in
+`OnDestroy`.
+
+```csharp
+public class FadeController : MonoBehaviour
+{
+    void Awake()
+    {
+        // Auto-unsubscribed when this GameObject is destroyed.
+        EventBus.Subscribe<PlayerTeleported>(OnTeleported).AddTo(this);
+    }
+
+    void OnTeleported(ref PlayerTeleported msg) => StartFade(msg.Duration);
+
+    void StartFade(float duration) { /* ... */ }
+}
+```
+
+For non-MonoBehaviour systems (or several subscriptions with one shared
+lifetime), collect them in a `SubscriptionBag` and dispose it once:
+
+```csharp
+public class AnalyticsSystem : IDisposable
+{
+    readonly SubscriptionBag _subscriptions = new();
+
+    public AnalyticsSystem()
+    {
+        EventBus.Subscribe<PlayerTeleported>(OnTeleport).AddTo(_subscriptions);
+        EventBus.Subscribe<PlayerScored>(OnScore).AddTo(_subscriptions);
+    }
+
+    public void Dispose() => _subscriptions.Dispose(); // unsubscribes both
+
+    void OnTeleport(ref PlayerTeleported msg) { /* ... */ }
+    void OnScore(ref PlayerScored msg) { /* ... */ }
+}
+```
+
+Prefer `.AddTo(this)` when the subscription lives as long as the component, the
+bag for plain-C# systems, and an explicit handle field when the lifetime is
+genuinely dynamic (e.g. toggled in `OnEnable`/`OnDisable`). All three are the
+same `Subscription` underneath. See
+[API Reference](API-Reference#subscription-lifetime).
 
 ## Queued Dispatch from a Worker Thread
 
@@ -110,10 +160,10 @@ public class VideoStreamReceiver
 
 public class VideoTextureUpdater : MonoBehaviour
 {
-    SubscriptionToken _token;
+    Subscription _subscription;
 
-    void OnEnable()  => _token = EventBus.Subscribe<FrameDecoded>(OnFrameDecoded);
-    void OnDisable() => EventBus.Unsubscribe(_token);
+    void OnEnable()  => _subscription = EventBus.Subscribe<FrameDecoded>(OnFrameDecoded);
+    void OnDisable() => _subscription.Dispose();
 
     // Guaranteed to run on the main thread (dispatched via DrainQueues)
     void OnFrameDecoded(ref FrameDecoded msg)
@@ -140,8 +190,8 @@ exactly one handler owns it.
 
 Unlike events, command handlers are not subscribed ad-hoc. A command has exactly
 one handler, and that handler is declared **once at the composition root** via
-`CommandBus.TryInstall`. The N:1 rule is validated there and reported as a return
-value — a duplicate or null handler never throws.
+`CommandBus.Install`. The N:1 rule is validated there and reported in the
+returned `InstallResult` — a duplicate or null handler never throws.
 
 ```csharp
 public struct PlaceOrder : ICommand
@@ -169,12 +219,12 @@ public class GameInstaller : MonoBehaviour
 
     void Awake()
     {
-        bool ok = CommandBus.TryInstall(out string error, r => r
+        var result = CommandBus.Install(r => r
             .Handle<PlaceOrder>(_orderHandler.Handle));
         //  .Handle<NextCommand>(...)   // one Handle per command type
 
-        if (!ok)
-            Debug.LogError($"Command install failed: {error}");
+        if (!result.Ok)
+            Debug.LogError($"Command install failed: {result.Error}");
     }
 }
 
@@ -183,31 +233,10 @@ CommandBus.Publish(new PlaceOrder { ItemId = 7, Quantity = 3 });
 ```
 
 Registering a second handler for the same command type — e.g. two
-`.Handle<PlaceOrder>(...)` calls — makes `TryInstall` return `false` with an
-`error` that names `PlaceOrder`. The install is atomic, so the previously
+`.Handle<PlaceOrder>(...)` calls — makes `Install` return a result whose
+`Error` names `PlaceOrder`. The install is atomic, so the previously
 installed handlers are left untouched.
 
 > The bundled sample does exactly this: `BasicPubSubSample.Awake` news up
 > `ScoreModel` and `MenuModel` and binds `AdjustScore`, `ResetScore`, and
-> `StartGame` through one `TryInstall` call — see [Bootstrap](Bootstrap).
-
-## Scene Transition Cleanup
-
-```csharp
-public class SceneLoader : MonoBehaviour
-{
-    async void LoadScene(string sceneName)
-    {
-        // Reset the buses before unloading — prevents stale subscriptions
-        // from destroyed MonoBehaviours receiving messages during the
-        // transition frame.
-        EventBus.Reset();
-        CommandBus.Reset();
-
-        await SceneManager.LoadSceneAsync(sceneName);
-
-        // The new scene's OnEnable calls re-subscribe events; its composition
-        // root re-runs CommandBus.TryInstall to rebind command handlers.
-    }
-}
-```
+> `StartGame` through one `Install` call — see [Bootstrap](Bootstrap).

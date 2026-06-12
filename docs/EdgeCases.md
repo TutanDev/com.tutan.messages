@@ -30,9 +30,18 @@ will receive subsequent messages.
 
 ## Unsubscribe During Dispatch
 
-Safe. The entry is marked inactive immediately. The delegate reference is set
-to `null` to release the GC root. The inactive entry is skipped for the
-remainder of the current dispatch. Compaction occurs after dispatch completes.
+Disposing a `Subscription` from inside a handler is safe. The entry is marked
+inactive immediately. The delegate reference is set to `null` to release the
+GC root. The inactive entry is skipped for the remainder of the current
+dispatch. Compaction occurs after dispatch completes.
+
+## Enqueue During Drain
+
+`DrainQueue` is bounded by the number of messages pending when the drain
+started. A handler that enqueues a message of the *same* type during dispatch
+therefore extends the **next** frame's drain, not the current one — a
+self-perpetuating handler (one that enqueues on every receipt) degrades to one
+message per frame instead of hanging the frame in an infinite drain loop.
 
 ## Handler Exceptions
 

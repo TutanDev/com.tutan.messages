@@ -5,12 +5,12 @@ namespace Tutan.Messages
 {
     /// <summary>
     /// Builder used at the composition root to declare the single handler for each
-    /// command type. Obtained inside the <see cref="CommandBus.TryInstall"/> callback —
+    /// command type. Obtained inside the <see cref="CommandBus.Install"/> callback —
     /// it cannot be constructed directly.
     /// <para>
     /// N:1 is enforced here as a value, not an exception: registering a second handler
     /// for the same command type (or a null handler) records an error that surfaces as
-    /// a failed <see cref="CommandBus.TryInstall"/> instead of throwing.
+    /// a failed <see cref="InstallResult"/> instead of throwing.
     /// </para>
     /// </summary>
     public sealed class CommandRegistry
@@ -48,14 +48,13 @@ namespace Tutan.Messages
 
         internal bool HasErrors => _errors.Count > 0;
 
-        internal string ErrorMessage =>
-            "CommandBus.TryInstall failed:" + Environment.NewLine + "  - " +
-            string.Join(Environment.NewLine + "  - ", _errors);
+        internal int HandlerCount => _apply.Count;
+
+        internal string ErrorMessage => "CommandBus.Install failed:" + Environment.NewLine + "  - " + string.Join(Environment.NewLine + "  - ", _errors);
 
         internal void ApplyTo(MessageBus<ICommand> bus)
         {
-            foreach (var apply in _apply)
-                apply(bus);
+            foreach (var apply in _apply) apply(bus);
         }
     }
 }

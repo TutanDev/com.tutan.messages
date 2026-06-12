@@ -11,14 +11,14 @@ namespace Tutan.Messages.Samples.BasicPubSub
     /// <para>
     /// This is the composition root: in <see cref="Awake"/> it builds the command
     /// handlers (<see cref="ScoreModel"/>, <see cref="MenuModel"/>) and binds each
-    /// command to its single handler through one <see cref="CommandBus.TryInstall"/>
+    /// command to its single handler through one <see cref="CommandBus.Install"/>
     /// call. Queue draining is handled for free by the auto-spawned
     /// <c>[MessagesHost]</c>, so there is nothing else to wire — just press Play.
     /// </para>
     /// <para>
     /// Everything it builds (<see cref="ScoreHud"/>, <see cref="ScoreDecayWorker"/>, the
     /// models) talks exclusively through the bus, never to each other. The N:1 guarantee
-    /// for <see cref="AdjustScore"/> is enforced by <see cref="CommandBus.TryInstall"/>:
+    /// for <see cref="AdjustScore"/> is enforced by <see cref="CommandBus.Install"/>:
     /// exactly one handler owns the command no matter who publishes it.
     /// </para>
     /// </summary>
@@ -32,9 +32,6 @@ namespace Tutan.Messages.Samples.BasicPubSub
 
         ScoreDecayWorker _enemy;
 
-        SubscriptionToken _startToken;
-        SubscriptionToken _gameOverToken;
-
 
         void Awake()
         {
@@ -46,16 +43,18 @@ namespace Tutan.Messages.Samples.BasicPubSub
             _scoreModel = new ScoreModel();
             _menuModel = new MenuModel();
 
-            bool ok = CommandBus.TryInstall(out string error, r => r
+            var install = CommandBus.Install(r => r
                 .Handle<AdjustScore>(_scoreModel.Handle)
                 .Handle<ResetScore>(_scoreModel.Handle)
                 .Handle<StartGame>(_menuModel.Handle));
 
-            if (!ok)
-                Debug.LogError($"[BasicPubSub] Command install failed: {error}");
+            if (!install.Ok)
+                Debug.LogError($"[BasicPubSub] Command install failed: {install.Error}");
 
-            _startToken = EventBus.Subscribe<GameStarted>(OnGameStarted);
-            _gameOverToken = EventBus.Subscribe<GameEnded>(OnGameEnded);
+            // Scoped to this component's GameObject: both subscriptions are
+            // disposed automatically when it is destroyed — no OnDestroy needed.
+            EventBus.Subscribe<GameStarted>(OnGameStarted).AddTo(this);
+            EventBus.Subscribe<GameEnded>(OnGameEnded).AddTo(this);
         }
 
         private void OnGameStarted(ref GameStarted message)
@@ -77,12 +76,6 @@ namespace Tutan.Messages.Samples.BasicPubSub
             // The menu was inactive (and unsubscribed) when GameEnded fired, so push the
             // final score directly rather than relying on the event it missed.
             _menuHud.SetFinalScore(message.FinalScore);
-        }
-
-        void OnDestroy()
-        {
-            EventBus.Unsubscribe(_startToken);
-            EventBus.Unsubscribe(_gameOverToken);
         }
     }
 }

@@ -7,7 +7,7 @@ working together with nothing wired directly between the parts.
 
 Nothing to configure. `BasicPubSubSample` is the composition root: in `Awake` it
 builds `ScoreModel` and `MenuModel` and binds each command to its single handler
-through one `CommandBus.TryInstall` call. Queue draining is handled for free by the
+through one `CommandBus.Install` call. Queue draining is handled for free by the
 auto-spawned `[MessagesHost]`. Just add the component and press Play.
 
 ## Run it
@@ -22,7 +22,9 @@ auto-spawned `[MessagesHost]`. Just add the component and press Play.
    `ScoreDecayWorker` drains the score from a background thread via
    `CommandBus.Enqueue` — a little more each second.
 5. Let the score fall below zero — `ScoreModel` raises `GameEnded`, the menu
-   returns and shows your final score.
+   returns and shows your final score. The final score is the size of the decay
+   tick that ended the run — it grows every second, so surviving longer means a
+   bigger score.
 6. Click **Start** again to play another round; the score resets.
 
 ## How the pieces talk
@@ -31,7 +33,7 @@ Nothing holds a reference to anything else — every interaction goes through a 
 
 - **`CommandBus` (N:1)** — `StartGame` → `MenuModel`; `AdjustScore` and `ResetScore`
   → `ScoreModel`. All three are bound at the composition root through a single
-  `CommandBus.TryInstall`, which enforces the N:1 rule (one handler per command type).
+  `CommandBus.Install`, which enforces the N:1 rule (one handler per command type).
 - **`EventBus` (N:M)** — `GameStarted` / `GameEnded` drive the HUD switching in
   `BasicPubSubSample`; `ScoreChanged` updates `ScoreHud`. Add another listener
   (logger, sound, analytics) and nothing else has to change.

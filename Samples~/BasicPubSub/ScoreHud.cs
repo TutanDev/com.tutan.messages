@@ -6,8 +6,8 @@ namespace Tutan.Messages.Samples.BasicPubSub
     // ── View ─────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// On-screen UI built entirely in code so the sample needs no scene wiring.
-    /// Demonstrates both directions of the bus from a single component:
+    /// On-screen view — its label and button are serialized references wired in the
+    /// sample scene. Demonstrates both directions of the bus from a single component:
     /// <list type="bullet">
     /// <item><b>Listens to events</b> — subscribes to <see cref="ScoreChanged"/> and
     /// refreshes the score label whenever the total moves, no matter who moved it.</item>
@@ -22,19 +22,22 @@ namespace Tutan.Messages.Samples.BasicPubSub
         [SerializeField] Text _scoreLabel;
         [SerializeField] Button _button;
 
-        SubscriptionToken _token;
+        Subscription _subscription;
 
 
         void OnEnable()
         {
             // EventBus is N:M and subscribe-anytime — wire the view to the event here.
-            _token = EventBus.Subscribe<ScoreChanged>(OnScoreChanged);
+            // The subscription toggles with the component, so hold the disposable
+            // handle and dispose it in OnDisable (rather than AddTo(this), which
+            // would keep it live until the GameObject is destroyed).
+            _subscription = EventBus.Subscribe<ScoreChanged>(OnScoreChanged);
             _button.onClick.AddListener(OnIncreaseClicked);
         }
 
         void OnDisable()
         {
-            EventBus.Unsubscribe(_token);
+            _subscription.Dispose();
             _button.onClick.RemoveListener(OnIncreaseClicked);
         }
 

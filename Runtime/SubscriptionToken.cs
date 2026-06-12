@@ -3,15 +3,12 @@ using System;
 namespace Tutan.Messages
 {
     /// <summary>
-    /// Opaque handle returned on Subscribe. Used for deterministic unsubscription.
+    /// Internal identity of a subscription (id + message type). Carried inside the
+    /// public <see cref="Subscription"/> handle; consumers never touch it directly —
+    /// deterministic unsubscription goes through <see cref="Subscription.Dispose"/>.
     /// Lightweight struct — no GC pressure.
     /// </summary>
-    /// <remarks>
-    /// <c>SubscriptionToken</c> contains a <see cref="System.Type"/> field and is
-    /// therefore <b>not</b> <c>unmanaged</c>. It cannot be stored in a
-    /// <c>NativeArray</c> or passed to Burst-compiled code.
-    /// </remarks>
-    public readonly struct SubscriptionToken : IEquatable<SubscriptionToken>
+    internal readonly struct SubscriptionToken : IEquatable<SubscriptionToken>
     {
         public readonly int Id;
         internal readonly Type MessageType;

@@ -83,10 +83,10 @@ a separate lookup table.
 - **`IEvent`** — a notification of something that *happened*. Any number of
   handlers may subscribe. Naming: past tense (`PlayerScored`, `OrderPlaced`).
 - **`ICommand`** — an *intent* to do something. Exactly one handler is bound,
-  once, at the composition root via `CommandBus.TryInstall`. Naming: imperative
+  once, at the composition root via `CommandBus.Install`. Naming: imperative
   (`MovePlayer`, `PlaceOrder`). This enforces the CQRS rule: the N:1 constraint
-  is validated at install time and a duplicate (or null) handler is reported as
-  a `false` return value, not thrown.
+  is validated at install time and a duplicate (or null) handler is reported in
+  the returned `InstallResult`, not thrown.
 
 ### Handlers
 
@@ -99,12 +99,13 @@ occur with `Action<T>`. Handlers *may* mutate the message (e.g., set a
 `Consumed` flag), but use this with care: dispatch order is registration
 order, and subsequent handlers will see the mutation.
 
-### Subscription Tokens
+### Subscription Handles
 
-`Subscribe` returns a `SubscriptionToken`. This is the *only* mechanism for
-unsubscription. There is no `-=` operator. This avoids the fragility of
-delegate equality checks with lambdas and closures (which generate new
-delegate instances and silently fail to unsubscribe).
+`Subscribe` returns a disposable `Subscription`. Disposing it is the *only*
+mechanism for unsubscription — directly, via a `SubscriptionBag`, or tied to a
+GameObject's lifetime with `.AddTo(this)`. There is no `-=` operator. This
+avoids the fragility of delegate equality checks with lambdas and closures
+(which generate new delegate instances and silently fail to unsubscribe).
 
 ### Dispatch Modes
 

@@ -28,6 +28,13 @@ namespace Tutan.Messages
 
     /// <summary>
     /// Base class for serializing a message type and its data in the inspector.
+    /// <para>
+    /// The payload round-trips through <c>JsonUtility</c>, which only serializes
+    /// plain structs marked <c>[Serializable]</c>. Message structs you want to
+    /// author through an <see cref="EventReference"/>/<see cref="CommandReference"/>
+    /// must carry that attribute — without it the payload silently stays at its
+    /// default values. Bus dispatch itself does not need it.
+    /// </para>
     /// </summary>
     [Serializable]
     public abstract class MessageReference

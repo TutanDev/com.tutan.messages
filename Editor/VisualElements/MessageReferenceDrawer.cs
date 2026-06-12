@@ -33,24 +33,42 @@ namespace Tutan.Messages.Editor
                 .OrderBy(t => t.Name)
                 .ToList();
 
-            var choices = types.Select(t => t.Name).ToList();
-            choices.Insert(0, "(None)");
-            
+            var labels = BuildTypeLabels(types);
+
             var values = types.Select(t => t.AssemblyQualifiedName).ToList();
             values.Insert(0, string.Empty);
 
             var currentIndex = Math.Max(0, values.IndexOf(property.stringValue));
 
-            var popup = new PopupField<string>(property.displayName, choices, currentIndex);
+            // The popup is index-based: two types can share a short name (same
+            // struct name, different namespace), so mapping the selection back
+            // through the display string would resolve to the wrong type.
+            var popup = new PopupField<int>(
+                property.displayName, Enumerable.Range(0, values.Count).ToList(), currentIndex,
+                i => labels[i], i => labels[i]);
             popup.RegisterValueChangedCallback(evt =>
             {
-                int idx = choices.IndexOf(evt.newValue);
-                property.stringValue = values[idx];
+                property.stringValue = values[evt.newValue];
                 property.serializedObject.ApplyModifiedProperties();
             });
 
             container.Add(popup);
             return container;
+        }
+
+        // Display labels for a "(None)" + types popup. Types whose short name
+        // collides with another entry are shown with their full name so the two
+        // are distinguishable in the dropdown.
+        internal static List<string> BuildTypeLabels(List<Type> types)
+        {
+            var duplicated = types.GroupBy(t => t.Name)
+                .Where(g => g.Count() > 1)
+                .Select(g => g.Key)
+                .ToHashSet();
+
+            var labels = types.Select(t => duplicated.Contains(t.Name) ? t.FullName : t.Name).ToList();
+            labels.Insert(0, "(None)");
+            return labels;
         }
     }
 
@@ -80,14 +98,17 @@ namespace Tutan.Messages.Editor
                 .OrderBy(t => t.Name)
                 .ToList();
 
-            var choices = types.Select(t => t.Name).ToList();
-            choices.Insert(0, "(None)");
+            var labels = MessageTypeDrawer.BuildTypeLabels(types);
             var values = types.Select(t => t.AssemblyQualifiedName).ToList();
             values.Insert(0, string.Empty);
 
             int currentIndex = Math.Max(0, values.IndexOf(typeNameProp.stringValue));
 
-            var typePopup = new PopupField<string>(property.displayName, choices, currentIndex);
+            // Index-based for the same reason as MessageTypeDrawer: duplicate
+            // short names must not resolve to the first match.
+            var typePopup = new PopupField<int>(
+                property.displayName, Enumerable.Range(0, values.Count).ToList(), currentIndex,
+                i => labels[i], i => labels[i]);
             typePopup.style.flexGrow = 1;
 
             var headerRow = new VisualElement();
@@ -186,8 +207,7 @@ namespace Tutan.Messages.Editor
 
             typePopup.RegisterValueChangedCallback(evt =>
             {
-                int idx = choices.IndexOf(evt.newValue);
-                typeNameProp.stringValue = values[idx];
+                typeNameProp.stringValue = values[evt.newValue];
                 dataJsonProp.stringValue = string.Empty; // Reset data on type change
                 typeNameProp.serializedObject.ApplyModifiedProperties();
                 publishBtn.SetEnabled(!string.IsNullOrEmpty(typeNameProp.stringValue));

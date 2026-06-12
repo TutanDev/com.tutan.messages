@@ -24,6 +24,8 @@ namespace Tutan.Messages.Samples.BasicPubSub
 
         public void SetFinalScore(int score)
         {
+            // The reported score is the fatal decay delta — a negative number whose
+            // magnitude grew with survival time. Negate it for display.
             _gameOver.text = $"Game Over\n\nFinal Score: {-score}";
             _gameOver.gameObject.SetActive(true);
         }

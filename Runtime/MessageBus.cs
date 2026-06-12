@@ -11,7 +11,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Runtime.CompilerServices;
+using System.Threading;
 using Unity.Profiling;
 using UnityEngine;
 
@@ -21,6 +21,36 @@ namespace Tutan.Messages
     /// Handler delegate. Ref parameter avoids struct copy on dispatch.
     /// </summary>
     public delegate void MessageHandler<T>(ref T message) where T : unmanaged, IMessage;
+
+    /// <summary>
+    /// Editor / development-build check that the main-thread-only entry points
+    /// really are on the main thread. Calling Publish/Subscribe/Dispose from a
+    /// worker thread (the classic mistake: an <c>async</c> continuation that
+    /// resumed on the thread pool) would otherwise corrupt the subscription list
+    /// silently. The check is <c>[Conditional]</c>, so release player builds
+    /// strip every call site — zero cost on the hot path.
+    /// </summary>
+    internal static class MainThreadGuard
+    {
+        static int s_mainThreadId = -1;
+
+        // SubsystemRegistration always runs on the main thread, before user code.
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        static void Capture() => s_mainThreadId = Thread.CurrentThread.ManagedThreadId;
+
+        [System.Diagnostics.Conditional("UNITY_EDITOR"), System.Diagnostics.Conditional("DEVELOPMENT_BUILD")]
+        public static void AssertMainThread(string operation)
+        {
+            // -1 = not captured yet (edit mode, before the first play). Skip the
+            // check rather than guess which thread is "main".
+            if (s_mainThreadId == -1 || Thread.CurrentThread.ManagedThreadId == s_mainThreadId)
+                return;
+
+            Debug.LogError(
+                $"Messages: {operation} is main-thread only but was called from thread " +
+                $"{Thread.CurrentThread.ManagedThreadId}. Use Enqueue to send messages from a worker thread.");
+        }
+    }
 
     // ── Channel (per-message-type storage) ───────────────────────────────
 
@@ -63,45 +93,72 @@ namespace Tutan.Messages
 
         public override int SubscriberCount => _activeCount;
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Publish(ref T message)
         {
+            // finally: an exception escaping the loop (anything outside the
+            // per-handler catch) must not leave _dispatchDepth stuck above 0,
+            // or compaction would be disabled for this channel forever.
             _dispatchDepth++;
-            var entries = Entries;
-            int count = entries.Count;
-
-            for (int i = 0; i < count; i++)
+            try
             {
-                var entry = entries[i];
-                if (entry.Active)
+                var entries = Entries;
+                int count = entries.Count;
+
+                for (int i = 0; i < count; i++)
                 {
-                    try
+                    var entry = entries[i];
+                    if (entry.Active)
                     {
-                        entry.Handler(ref message);
-                    }
-                    catch (Exception ex)
-                    {
-                        // Log but don't break dispatch chain. A broken handler
-                        // must not cascade into a broken frame.
-                        Debug.LogException(ex);
+                        try
+                        {
+                            entry.Handler(ref message);
+                        }
+                        catch (Exception ex)
+                        {
+                            // Log but don't break dispatch chain. A broken handler
+                            // must not cascade into a broken frame.
+                            Debug.LogException(ex);
+                        }
                     }
                 }
             }
-
-            _dispatchDepth--;
-            if (_dispatchDepth == 0)
-                CompactIfNeeded();
+            finally
+            {
+                _dispatchDepth--;
+                if (_dispatchDepth == 0)
+                    CompactIfNeeded();
+            }
         }
 
         public void Enqueue(in T message)
         {
-            (_pendingQueue ??= new ConcurrentQueue<T>()).Enqueue(message);
+            // Lazy init must be a CAS, not `??=`: two worker threads racing on the
+            // first Enqueue of this type would otherwise each create a queue, and
+            // the loser's message would be silently lost.
+            var queue = Volatile.Read(ref _pendingQueue);
+            if (queue == null)
+            {
+                var fresh = new ConcurrentQueue<T>();
+                queue = Interlocked.CompareExchange(ref _pendingQueue, fresh, null) ?? fresh;
+            }
+            queue.Enqueue(message);
         }
 
         public override void DrainQueue()
         {
-            if (_pendingQueue == null) return;
-            while (_pendingQueue.TryDequeue(out var msg))
+            // Volatile so a queue created by a worker thread is visible here at
+            // the latest one frame after its first Enqueue. IsEmpty is the O(1)
+            // fast path; Count snapshots across segments and spins, so it is
+            // only paid when there is actually something to drain.
+            var queue = Volatile.Read(ref _pendingQueue);
+            if (queue == null || queue.IsEmpty) return;
+
+            // Bound the drain to the backlog present when it started. A handler
+            // that enqueues the same message type during dispatch extends the
+            // *next* frame's drain instead of this one — an unbounded loop here
+            // would let a self-perpetuating handler hang the frame forever.
+            int budget = queue.Count;
+            while (budget-- > 0 && queue.TryDequeue(out var msg))
                 Publish(ref msg);
         }
 
@@ -150,8 +207,11 @@ namespace Tutan.Messages
 
         void CompactIfNeeded()
         {
-            if (_dirtyCount == 0) return;
-            if (_dirtyCount < 4 && _dirtyCount < Entries.Count / 4) return;
+            // Compact only when there are at least 4 dead entries AND they make
+            // up at least a quarter of the list — small absolute counts aren't
+            // worth an O(n) RemoveAll, and on large lists a low dead ratio
+            // would make every few unsubscribes pay a full-list sweep.
+            if (_dirtyCount < 4 || _dirtyCount < Entries.Count / 4) return;
 
             Entries.RemoveAll(static e => !e.Active);
             _dirtyCount = 0;
@@ -165,18 +225,25 @@ namespace Tutan.Messages
     /// Generic message bus parameterized by message base type (ICommand or IEvent).
     /// Subclasses own their singletons and may add bus-specific rules.
     ///
-    /// Thread safety: Publish(), Subscribe(), Unsubscribe(), and DrainQueues()
+    /// Thread safety: Publish(), Subscribe(), Subscription.Dispose(), and DrainQueues()
     /// are main-thread only. Enqueue() is thread-safe and may race with any
     /// main-thread call: channel creation goes through a ConcurrentDictionary,
     /// and the message lands in a per-channel ConcurrentQueue.
     /// </summary>
-    public class MessageBus<TBase> : IDisposable where TBase : IMessage
+    public class MessageBus<TBase> : IDisposable, ISubscriptionOwner where TBase : IMessage
     {
         // ConcurrentDictionary so worker-thread Enqueue can race safely with
         // main-thread Subscribe/Publish/DrainQueues. Lookups are lock-free;
         // GetOrAdd is thread-safe. Per-channel Entry list mutations remain
         // main-thread only (Subscribe/Unsubscribe/Publish/DrainQueue).
         readonly ConcurrentDictionary<Type, ChannelBase> _channels = new(concurrencyLevel: 2, capacity: 32);
+
+        // Cached channel list for DrainQueues. Enumerating a ConcurrentDictionary
+        // allocates a class enumerator, and DrainQueues runs every frame — this
+        // list keeps the steady-state drain allocation-free. Main thread only
+        // (like DrainQueues itself); rebuilt when the channel set changes.
+        readonly List<ChannelBase> _drainList = new();
+
         int _nextTokenId;
         bool _disposed;
 
@@ -195,12 +262,18 @@ namespace Tutan.Messages
         }
 
         /// <summary>
-        /// Register a handler for message type T. Returns a token for unsubscription.
+        /// Register a handler for message type T. Returns a disposable
+        /// <see cref="Subscription"/> bound to this bus instance — dispose it
+        /// (directly, via a <see cref="SubscriptionBag"/>, or with <c>AddTo</c>) to
+        /// unsubscribe. Because the handle captures the bus instance, disposing it
+        /// after a <see cref="Reset"/> is a harmless no-op rather than a risk to an
+        /// unrelated subscription on the replacement bus.
         /// Main thread only. Virtual so subclasses can add pre-subscribe guards.
         /// </summary>
-        public virtual SubscriptionToken Subscribe<T>(MessageHandler<T> handler) where T : unmanaged, TBase
+        public virtual Subscription Subscribe<T>(MessageHandler<T> handler) where T : unmanaged, TBase
         {
             if (handler == null) throw new ArgumentNullException(nameof(handler));
+            MainThreadGuard.AssertMainThread("Subscribe");
 
             var channel = GetOrCreateChannel<T>();
             int tokenId = ++_nextTokenId;
@@ -209,16 +282,20 @@ namespace Tutan.Messages
 
             MessagesInstrumentation.RecordSubscribe(_instrumentationKind, typeof(T), tokenId, handler);
 
-            return new SubscriptionToken(tokenId, typeof(T));
+            return new Subscription(this, new SubscriptionToken(tokenId, typeof(T)));
         }
+
+        bool ISubscriptionOwner.Unsubscribe(SubscriptionToken token) => Unsubscribe(token);
 
         /// <summary>
         /// Remove a subscription by token. Safe to call during dispatch.
         /// Returns false if the token was already unsubscribed or invalid.
+        /// Reached through <see cref="Subscription.Dispose"/> — not public API.
         /// </summary>
-        public bool Unsubscribe(SubscriptionToken token)
+        internal bool Unsubscribe(SubscriptionToken token)
         {
             if (!token.IsValid) return false;
+            MainThreadGuard.AssertMainThread("Subscription.Dispose");
             if (!_channels.TryGetValue(token.MessageType, out var channelBase)) return false;
 
             bool removed = channelBase.RemoveEntry(token.Id);
@@ -233,6 +310,8 @@ namespace Tutan.Messages
         /// </summary>
         public void Publish<T>(ref T message) where T : unmanaged, TBase
         {
+            MainThreadGuard.AssertMainThread("Publish");
+
             // Look up the channel first so instrumentation can snapshot the
             // subscribers as they are at this instant. channelBase is null when
             // nothing has ever subscribed — the publish is still recorded.
@@ -271,13 +350,25 @@ namespace Tutan.Messages
         /// </summary>
         public void DrainQueues()
         {
+            MainThreadGuard.AssertMainThread("DrainQueues");
             using var _ = s_drainMarker.Auto();
 
             MessagesInstrumentation.RecordDrain(_instrumentationKind, start: true);
-            foreach (var kvp in _channels)
+
+            // Channels are only ever added (Reset/Dispose clear the drain list
+            // explicitly), so a count mismatch is the complete staleness signal.
+            // A channel added by a worker-thread Enqueue racing this check is
+            // picked up next frame at the latest.
+            if (_drainList.Count != _channels.Count)
             {
-                kvp.Value.DrainQueue();
+                _drainList.Clear();
+                foreach (var kvp in _channels)
+                    _drainList.Add(kvp.Value);
             }
+
+            for (int i = 0; i < _drainList.Count; i++)
+                _drainList[i].DrainQueue();
+
             MessagesInstrumentation.RecordDrain(_instrumentationKind, start: false);
         }
 
@@ -326,12 +417,22 @@ namespace Tutan.Messages
             if (_disposed) return;
             _disposed = true;
             if (disposing)
+            {
                 _channels.Clear();
+                // Must accompany every _channels.Clear(): a stale drain list
+                // whose count happens to match the rebuilt channel set would
+                // silently drain the old channels instead of the new ones.
+                _drainList.Clear();
+            }
         }
 
         /// <summary>
-        /// Clear all subscriptions and queued messages. Useful for scene transitions.
+        /// Clear all subscriptions and queued messages.
         /// </summary>
-        public void Reset() => _channels.Clear();
+        public void Reset()
+        {
+            _channels.Clear();
+            _drainList.Clear();
+        }
     }
 }

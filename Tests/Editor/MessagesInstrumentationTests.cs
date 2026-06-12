@@ -32,17 +32,17 @@ namespace Tutan.Messages.Tests
         [Test]
         public void Subscribe_RecordsSubscribeOp()
         {
-            var token = EventBus.Subscribe<Ping>((ref Ping p) => { });
+            var subscription = EventBus.Subscribe<Ping>((ref Ping p) => { });
 
             var rec = MessagesInstrumentation.Snapshot()
                 .Single(r => r.Op == MessagesInstrumentation.Op.Subscribe && r.MessageType == typeof(Ping));
 
-            Assert.AreEqual(token.Id, rec.TokenId);
+            Assert.AreEqual(subscription.Token.Id, rec.TokenId);
             Assert.AreEqual(MessagesInstrumentation.BusKind.Event, rec.Bus);
         }
 
         [Test]
-        public void Publish_RecordsPublishOp_AndPayloadWhenCaptureOn()
+        public void Publish_RecordsPublishOp_AndPayload()
         {
             EventBus.Subscribe<Ping>((ref Ping p) => { });
 
@@ -57,20 +57,9 @@ namespace Tutan.Messages.Tests
         }
 
         [Test]
-        public void Publish_OmitsPayloadWhenCaptureOff()
-        {
-            EventBus.Subscribe<Ping>((ref Ping p) => { });
-            EventBus.Publish(new Ping { Value = 7 });
-
-            var rec = MessagesInstrumentation.Snapshot()
-                .Single(r => r.Op == MessagesInstrumentation.Op.Publish);
-            Assert.IsNull(rec.PayloadBox);
-        }
-
-        [Test]
         public void CommandBus_TagsRecordsAsCommandKind()
         {
-            CommandBus.TryInstall(out _, r => r.Handle<DoThing>((ref DoThing m) => { }));
+            CommandBus.Install(r => r.Handle<DoThing>((ref DoThing m) => { }));
             CommandBus.Publish(new DoThing { Value = 1 });
 
             var publishRec = MessagesInstrumentation.Snapshot()
@@ -104,11 +93,11 @@ namespace Tutan.Messages.Tests
         [Test]
         public void Unsubscribe_RecordsUnsubscribeOp_OnlyOnSuccess()
         {
-            var token = EventBus.Subscribe<Ping>((ref Ping p) => { });
+            var subscription = EventBus.Subscribe<Ping>((ref Ping p) => { });
             MessagesInstrumentation.Clear();
 
-            Assert.IsTrue(EventBus.Unsubscribe(token));
-            Assert.IsFalse(EventBus.Unsubscribe(token));
+            subscription.Dispose();
+            subscription.Dispose(); // idempotent — must not record a second op
 
             int count = MessagesInstrumentation.Snapshot()
                 .Count(r => r.Op == MessagesInstrumentation.Op.Unsubscribe);
@@ -150,7 +139,7 @@ namespace Tutan.Messages.Tests
             EventBus.Publish(new Ping { Value = 1 });
 
             // Mutate the live bus after the publish was recorded.
-            EventBus.Unsubscribe(a);
+            a.Dispose();
 
             var rec = MessagesInstrumentation.Snapshot()
                 .Single(r => r.Op == MessagesInstrumentation.Op.Publish && r.MessageType == typeof(Ping));

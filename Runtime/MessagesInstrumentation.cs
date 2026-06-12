@@ -248,8 +248,11 @@ namespace Tutan.Messages
                 s_buffer[s_head] = record;
                 s_head = (s_head + 1) % s_buffer.Length;
                 if (s_count < s_buffer.Length) s_count++;
+                // Inside the lock so TotalEver can never run ahead of the buffer
+                // contents — the console's incremental catch-up pairs the two.
+                // Still Interlocked: TotalEver reads it without taking the lock.
+                Interlocked.Increment(ref s_totalEver);
             }
-            Interlocked.Increment(ref s_totalEver);
         }
     }
 }

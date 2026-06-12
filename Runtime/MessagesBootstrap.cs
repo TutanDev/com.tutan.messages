@@ -13,7 +13,7 @@ namespace Tutan.Messages
     /// callback, a manager, etc.).
     ///
     /// Command handlers are <b>not</b> wired here. Bind each command's single handler
-    /// at your composition root through <see cref="CommandBus.TryInstall"/>.
+    /// at your composition root through <see cref="CommandBus.Install"/>.
     /// </summary>
     public static class MessagesBootstrap
     {
@@ -21,9 +21,13 @@ namespace Tutan.Messages
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         static void InstallHost()
         {
+            // HideInHierarchy only — NOT HideAndDontSave. DontSave-flagged objects
+            // are excluded from the editor's play-mode cleanup, so they would leak
+            // one hidden host per play session. DontDestroyOnLoad already provides
+            // the scene-load persistence.
             var go = new GameObject("[MessagesHost]")
             {
-                hideFlags = HideFlags.HideAndDontSave
+                hideFlags = HideFlags.HideInHierarchy
             };
             Object.DontDestroyOnLoad(go);
             go.AddComponent<MessagesHost>();

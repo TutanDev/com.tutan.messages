@@ -22,15 +22,20 @@ public struct PlayerScored : IEvent
     public float Timestamp;
 }
 
-// 2. Subscribe — get a token back
-var token = EventBus.Subscribe<PlayerScored>(
+// 2. Subscribe — get a disposable Subscription back
+var subscription = EventBus.Subscribe<PlayerScored>(
     (ref PlayerScored e) => Debug.Log($"+{e.Points}"));
 
 // 3. Publish — zero allocations
 EventBus.Publish(new PlayerScored { Points = 100, Timestamp = Time.time });
 
-// 4. Unsubscribe by token (no delegate-equality footguns)
-EventBus.Unsubscribe(token);
+// 4. Unsubscribe by disposing (no delegate-equality footguns)…
+subscription.Dispose();
+
+// …or skip the field entirely: tie the subscription to a MonoBehaviour,
+// and it is disposed automatically when the GameObject is destroyed.
+EventBus.Subscribe<PlayerScored>((ref PlayerScored e) => Debug.Log($"+{e.Points}"))
+        .AddTo(this);
 ```
 
 That's it. A hidden `[MessagesHost]` is spawned for you at startup, so the bus
@@ -48,14 +53,16 @@ configure.
   frozen at fire time).
 - **Thread-safe `Enqueue`** for network/decode/async callbacks; deferred
   dispatch on the main thread via `DrainQueues()`.
-- **Subscription tokens** — explicit lifecycle, no leaked lambdas, no
-  `-=` bugs with closures.
+- **Disposable subscriptions** — `Subscribe` returns a `Subscription`;
+  dispose it, bundle several in a `SubscriptionBag`, or tie one to a
+  GameObject's lifetime with `.AddTo(this)` and forget about `OnDestroy`.
+  Explicit lifecycle: no leaked lambdas, no `-=` bugs with closures.
 - **Profiler markers** on every entry point. Visible in Unity Profiler timeline.
 - **Zero-config draining.** A persistent `[MessagesHost]` is auto-spawned at
   startup to drain both buses every `LateUpdate`. Define
   `TUTAN_MESSAGES_NO_AUTO_HOST` to opt out and own the drain loop yourself.
   Command handlers are bound explicitly at your composition root via
-  `CommandBus.TryInstall`.
+  `CommandBus.Install`.
 - **Unity 6.0 (6000.1) and newer.** Works on Windows, Mac, Linux, iOS,
   Android, WebGL, all XR platforms (Quest, PCVR, visionOS).
 
@@ -66,9 +73,9 @@ One sample included, importable from the Package Manager:
 - **Basic Publish / Subscribe** — a live score in a self-contained scene. A button
   publishes commands, a background thread enqueues commands off the main thread, and
   the score UI listens for events. Covers the CommandBus (N:1), the EventBus (N:M),
-  composition-root handler binding via `CommandBus.TryInstall`, and thread-safe
-  `Enqueue`/drain in one place. Drop the `BasicPubSubSample` component on a
-  GameObject and press Play — no configuration needed.
+  composition-root handler binding via `CommandBus.Install`, and thread-safe
+  `Enqueue`/drain in one place. Import the sample, open its scene, and press
+  Play — no configuration needed.
 
 ## Full documentation
 
