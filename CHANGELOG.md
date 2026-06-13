@@ -2,6 +2,20 @@
 
 All notable changes to `com.tutan.messages` will be documented in this file.
 
+## [1.2.1] - 2026-06-13
+
+### Docs
+- **Corrected the minimum Unity version in `Documentation~/Messages.md`.** It
+  still claimed "Unity 2021.3 LTS and newer", contradicting `package.json`
+  (`"unity": "6000.1"`) and the `README` ("Unity 6.0 (6000.1) and newer"). The
+  doc now states Unity 6.0 (6000.1) and newer. No code change.
+- **Tightened the generic constraints in `Documentation~/API-Reference.md` to
+  match the code.** `Subscribe<T>` now shows `where T : unmanaged, IEvent`
+  (it is `EventBus`-only), and the shared `Publish`/`Enqueue`/`GetSubscriberCount`
+  signatures use `where T : unmanaged, TBase` (resolving to `IEvent` on
+  `EventBus`, `ICommand` on `CommandBus`) instead of a blanket `IMessage`. No
+  code change.
+
 ## [1.2.0] - 2026-06-13
 
 ### Added

@@ -5,7 +5,7 @@
 # Messages
 
 **Namespace:** `Tutan.Messages`
-**Target:** Unity 2021.3 LTS and newer (Unity 6 / CoreCLR friendly), XR applications
+**Target:** Unity 6.0 (6000.1) and newer (CoreCLR friendly), XR applications
 
 ## Why a Message Bus
 
