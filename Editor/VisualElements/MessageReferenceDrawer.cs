@@ -133,25 +133,18 @@ namespace Tutan.Messages.Editor
             {
                 if (string.IsNullOrEmpty(typeNameProp.stringValue)) return;
 
-                // Create a temporary instance to call Publish
-                MessageReference tempRef = null;
-                if (fieldInfo.FieldType == typeof(EventReference) || fieldInfo.FieldType.IsSubclassOf(typeof(EventReference)))
-                    tempRef = new EventReference();
-                else if (fieldInfo.FieldType == typeof(CommandReference) || fieldInfo.FieldType.IsSubclassOf(typeof(CommandReference)))
-                    tempRef = new CommandReference();
+                // Build the reference matching the field category (baseType was
+                // resolved above), copy the serialized values straight in — the
+                // fields are internal and this Editor assembly has InternalsVisibleTo
+                // access — and dispatch through the virtual Publish().
+                MessageReference tempRef = baseType == typeof(IEvent) ? new EventReference()
+                                         : baseType == typeof(ICommand) ? new CommandReference()
+                                         : null;
+                if (tempRef == null) return;
 
-                if (tempRef != null)
-                {
-                    // Copy values
-                    var typeField = typeof(MessageReference).GetField("typeName", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-                    var dataField = typeof(MessageReference).GetField("dataJson", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-                    typeField.SetValue(tempRef, typeNameProp.stringValue);
-                    dataField.SetValue(tempRef, dataJsonProp.stringValue);
-
-                    // Call Publish via reflection to be safe with the specific type
-                    var publishMethod = tempRef.GetType().GetMethod("Publish");
-                    publishMethod?.Invoke(tempRef, null);
-                }
+                tempRef.typeName = typeNameProp.stringValue;
+                tempRef.dataJson = dataJsonProp.stringValue;
+                tempRef.Publish();
             };
 
             headerRow.Add(publishBtn);
@@ -166,7 +159,7 @@ namespace Tutan.Messages.Editor
                 dataContainer.Clear();
                 if (string.IsNullOrEmpty(typeNameProp.stringValue)) return;
 
-                var type = Type.GetType(typeNameProp.stringValue);
+                var type = ScriptFileField.ResolveType(typeNameProp.stringValue);
                 if (type == null) return;
 
                 // Create a temporary object to hold the data for editing
@@ -183,26 +176,15 @@ namespace Tutan.Messages.Editor
                     instance = Activator.CreateInstance(type);
                 }
 
-                // Since we can't easily use PropertyField on a non-serialized object,
-                // we'll use IMGUIContainer to draw the fields of the struct.
-                var imgui = new IMGUIContainer(() =>
+                // One native UI-Toolkit field per public field of the boxed struct.
+                // Each field writes back into the boxed `instance` via reflection and
+                // re-serializes it to the JSON property — the same data flow as before,
+                // just per-field instead of one IMGUI pass.
+                var fields = type.GetFields(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+                foreach (var f in fields)
                 {
-                    EditorGUI.BeginChangeCheck();
-                    
-                    // Simple reflection-based inspector for the struct
-                    var fields = type.GetFields(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
-                    foreach (var f in fields)
-                    {
-                        DrawField(f, instance);
-                    }
-
-                    if (EditorGUI.EndChangeCheck())
-                    {
-                        dataJsonProp.stringValue = JsonUtility.ToJson(instance);
-                        dataJsonProp.serializedObject.ApplyModifiedProperties();
-                    }
-                });
-                dataContainer.Add(imgui);
+                    dataContainer.Add(CreateFieldElement(f, instance, dataJsonProp));
+                }
             };
 
             typePopup.RegisterValueChangedCallback(evt =>
@@ -219,32 +201,68 @@ namespace Tutan.Messages.Editor
             return root;
         }
 
-        private void DrawField(System.Reflection.FieldInfo field, object target)
+        // Builds a native UI-Toolkit field bound to one public field of the boxed
+        // struct `instance`. Edits write back through reflection and re-serialize the
+        // whole struct to `dataJsonProp`. Unknown types render a disabled label so the
+        // editor degrades gracefully instead of throwing.
+        private VisualElement CreateFieldElement(System.Reflection.FieldInfo field, object instance, SerializedProperty dataJsonProp)
         {
-            if (field.Name.Equals("Timestamp", StringComparison.OrdinalIgnoreCase))
-                return;
+            var label = ObjectNames.NicifyVariableName(field.Name);
+            var type = field.FieldType;
+            var val = field.GetValue(instance);
 
-            var val = field.GetValue(target);
-var type = field.FieldType;
+            void Persist()
+            {
+                dataJsonProp.stringValue = JsonUtility.ToJson(instance);
+                dataJsonProp.serializedObject.ApplyModifiedProperties();
+            }
+
+            // Wires a field's value-changed callback to the reflection write + persist.
+            VisualElement Bind<T>(BaseField<T> el, Action<T> write)
+            {
+                el.RegisterValueChangedCallback(evt =>
+                {
+                    write(evt.newValue);
+                    Persist();
+                });
+                return el;
+            }
 
             if (type == typeof(int))
-                field.SetValue(target, EditorGUILayout.IntField(field.Name, (int)val));
-            else if (type == typeof(float))
-                field.SetValue(target, EditorGUILayout.FloatField(field.Name, (float)val));
-            else if (type == typeof(bool))
-                field.SetValue(target, EditorGUILayout.Toggle(field.Name, (bool)val));
-            else if (type == typeof(string))
-                field.SetValue(target, EditorGUILayout.TextField(field.Name, (string)val));
-            else if (type == typeof(Vector3))
-                field.SetValue(target, EditorGUILayout.Vector3Field(field.Name, (Vector3)val));
-            else if (type == typeof(Color))
-                field.SetValue(target, EditorGUILayout.ColorField(field.Name, (Color)val));
-            else if (type.IsEnum)
-                field.SetValue(target, EditorGUILayout.EnumPopup(field.Name, (Enum)val));
-            else
-            {
-                EditorGUILayout.LabelField(field.Name, $"Unsupported type: {type.Name}");
-            }
+                return Bind(new IntegerField(label) { value = (int)val }, v => field.SetValue(instance, v));
+            if (type == typeof(long))
+                return Bind(new LongField(label) { value = (long)val }, v => field.SetValue(instance, v));
+            if (type == typeof(float))
+                return Bind(new FloatField(label) { value = (float)val }, v => field.SetValue(instance, v));
+            if (type == typeof(double))
+                return Bind(new DoubleField(label) { value = (double)val }, v => field.SetValue(instance, v));
+            if (type == typeof(bool))
+                return Bind(new Toggle(label) { value = (bool)val }, v => field.SetValue(instance, v));
+            if (type == typeof(string))
+                return Bind(new TextField(label) { value = (string)val }, v => field.SetValue(instance, v));
+            if (type.IsEnum)
+                return Bind(new EnumField(label, (Enum)val), v => field.SetValue(instance, v));
+            if (type == typeof(Vector2))
+                return Bind(new Vector2Field(label) { value = (Vector2)val }, v => field.SetValue(instance, v));
+            if (type == typeof(Vector3))
+                return Bind(new Vector3Field(label) { value = (Vector3)val }, v => field.SetValue(instance, v));
+            if (type == typeof(Vector4))
+                return Bind(new Vector4Field(label) { value = (Vector4)val }, v => field.SetValue(instance, v));
+            if (type == typeof(Vector2Int))
+                return Bind(new Vector2IntField(label) { value = (Vector2Int)val }, v => field.SetValue(instance, v));
+            if (type == typeof(Vector3Int))
+                return Bind(new Vector3IntField(label) { value = (Vector3Int)val }, v => field.SetValue(instance, v));
+            if (type == typeof(Color))
+                return Bind(new ColorField(label) { value = (Color)val }, v => field.SetValue(instance, v));
+            if (type == typeof(Quaternion))
+                // Quaternion has no dedicated field — edit it as euler angles, same as
+                // the Transform inspector does.
+                return Bind(new Vector3Field(label) { value = ((Quaternion)val).eulerAngles },
+                    v => field.SetValue(instance, Quaternion.Euler(v)));
+
+            var unsupported = new Label($"{label}: unsupported type ({type.Name})");
+            unsupported.SetEnabled(false);
+            return unsupported;
         }
     }
 }

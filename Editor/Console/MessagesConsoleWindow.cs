@@ -366,15 +366,19 @@ namespace Tutan.Messages.Editor
             for (int i = startIdx; i < currentCount; i++)
             {
                 var r = snapshot[i];
-                
+
                 // Filtering for Log
                 if (PassesFilter(r))
-                {
                     _filtered.Add(r);
-                    if (_filtered.Count > capacity)
-                        _filtered.RemoveAt(0);
-                }
             }
+
+            // Batch-trim rather than RemoveAt(0) per overflowing record: each
+            // RemoveAt(0) shifts the whole list (O(n)); doing it per item makes a
+            // steady-state overflow O(n²). Let the list run a margin past capacity,
+            // then drop the entire overflow in one RemoveRange (a single shift).
+            const int TrimMargin = 128;
+            if (_filtered.Count > capacity + TrimMargin)
+                _filtered.RemoveRange(0, _filtered.Count - capacity);
 
             _lastTotalProcessed = totalEver;
         }

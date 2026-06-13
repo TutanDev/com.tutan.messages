@@ -92,11 +92,11 @@ prototyping, or wiring data-driven triggers without writing publisher code.
 
 > **Not recommended for runtime hot paths.** Publishing via a
 > `MessageReference` involves JSON deserialization (`JsonUtility.FromJson`),
-> `Activator.CreateInstance`, **boxing the struct**, and a reflected generic
-> `Publish` invocation. This is intentionally the opposite of the zero-alloc
-> dispatch path the rest of the bus provides. Use it for editor/authoring
-> workflows, debug buttons, and tooling — not for per-frame gameplay
-> dispatch.
+> `Activator.CreateInstance`, and **boxing the struct** before it is dispatched
+> through the non-generic `PublishBoxed` seam (one unbox inside the channel).
+> This is intentionally the opposite of the zero-alloc dispatch path the rest
+> of the bus provides. Use it for editor/authoring workflows, debug buttons,
+> and tooling — not for per-frame gameplay dispatch.
 
 ### Usage
 
@@ -117,10 +117,13 @@ public class TriggerZone : MonoBehaviour
 }
 ```
 
-In the Inspector you get a type dropdown, a reflection-based field editor
+In the Inspector you get a type dropdown, a native UI-Toolkit field editor
 for the struct's public fields, and a small **▶** button that synthesizes
 and publishes the message immediately — handy for poking subscribers without
-entering play mode logic.
+entering play mode logic. The struct's fields are enumerated by reflection,
+but each one is rendered with its matching UI-Toolkit control (e.g.
+`IntegerField`, `Vector3Field`, `EnumField`), consistent with the rest of the
+editor tooling.
 
 > **Mark referenced structs `[Serializable]`.** The payload round-trips
 > through `JsonUtility`, which only serializes plain structs that carry the
@@ -143,12 +146,27 @@ Resolve it at runtime with `Type.GetType(eventType)`.
 
 ### Supported field types in the inline editor
 
-The inline reflection editor renders `int`, `float`, `bool`, `string`,
-`Vector3`, `Color`, and any `enum`. Other types fall back to an
-"Unsupported type" label — if you need them edited from the inspector,
-either add support to `MessageReferenceDrawer.DrawField` or expose the
-struct through a `[Serializable]` wrapper instead.
+The inline editor renders these field types with native UI-Toolkit controls:
 
-A field literally named `Timestamp` is skipped by the editor and is
-auto-populated at publish time (`float` → `Time.time`, `double` →
-`(double)Time.time`, `long` → `DateTime.UtcNow.Ticks`).
+| Field type | Control |
+|------------|---------|
+| `int` | `IntegerField` |
+| `long` | `LongField` |
+| `float` | `FloatField` |
+| `double` | `DoubleField` |
+| `bool` | `Toggle` |
+| `string` | `TextField` |
+| `enum` | `EnumField` |
+| `Vector2` / `Vector3` / `Vector4` | `Vector2Field` / `Vector3Field` / `Vector4Field` |
+| `Vector2Int` / `Vector3Int` | `Vector2IntField` / `Vector3IntField` |
+| `Color` | `ColorField` |
+| `Quaternion` | `Vector3Field` (edited as euler angles) |
+
+Other types fall back to a disabled "unsupported type" label — if you need
+them edited from the inspector, either add a case to
+`MessageReferenceDrawer.CreateFieldElement` or expose the struct through a
+`[Serializable]` wrapper instead.
+
+Every field is authored explicitly — including any field named `Timestamp`.
+The reference publishes exactly the values you enter; no field is populated
+implicitly at publish time.

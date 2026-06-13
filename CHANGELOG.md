@@ -2,6 +2,60 @@
 
 All notable changes to `com.tutan.messages` will be documented in this file.
 
+## [1.2.0] - 2026-06-13
+
+### Added
+- **The inline `EventReference`/`CommandReference` payload editor now supports
+  many more field types.** Alongside the previous `int`/`float`/`bool`/`string`/
+  `Vector3`/`Color`/`enum`, it now renders `long`, `double`, `Vector2`, `Vector4`,
+  `Vector2Int`, `Vector3Int`, and `Quaternion` (edited as euler angles). Unknown
+  types still fall back to a disabled "unsupported type" label.
+
+### Changed
+- **Editor synthetic-publish path no longer uses reflection.** The inspector
+  "publish" button (and `EventReference.Publish()` / `CommandReference.Publish()`)
+  previously found the generic `Publish<T>` via a `GetMethods()` scan and invoked
+  it with `MakeGenericMethod`, and the drawer set the reference's `typeName` /
+  `dataJson` through `NonPublic` reflection. Dispatch now goes through a new
+  non-generic `MessageBus.PublishBoxed` seam (one unbox inside `Channel<T>`,
+  editor-only — not on the hot path), and the drawer assigns the internal fields
+  directly via the existing `InternalsVisibleTo` access. No public API change;
+  `MessageReference.Publish()` is now declared `abstract` on the base.
+- **`MessageReference.CreateMessage()` no longer auto-fills a `Timestamp` field.**
+  It previously reflected for a field named `Timestamp` (case-insensitive) and
+  stamped `Time.time` / `DateTime.UtcNow.Ticks` into it — an invisible convention
+  that coupled serialization to a field name. A synthetic message now carries
+  exactly the values authored in the inspector, and the `Timestamp` field is
+  editable like any other (the drawer no longer hides it). Set timestamps
+  explicitly at publish time if you need them.
+- **The `EventReference`/`CommandReference` payload editor is now built in UI
+  Toolkit** instead of an `IMGUIContainer`. Each public field of the message
+  struct renders with its matching native control (`IntegerField`, `Vector3Field`,
+  `EnumField`, …), consistent with the rest of the editor tooling. The data flow
+  is unchanged — edits write back into the boxed struct and re-serialize to the
+  stored JSON.
+- **`MessageReference` type resolution is now resilient to assembly-identity
+  drift.** `GetMessageType()` / `CreateMessage()` resolved the stored
+  `AssemblyQualifiedName` with a bare `Type.GetType`, which returns null if the
+  assembly's version/identity has changed since the name was serialized.
+  Resolution now falls back to scanning loaded assemblies. The stored format is
+  unchanged.
+
+### Fixed
+- **`ScriptFileField` rows render styled again.** The control loaded its
+  stylesheet from a hardcoded `Packages/com.tutan.messages/Editor/ScriptFileField.uss`
+  path that no longer matched the file's actual location, so `LoadAssetAtPath`
+  returned null and the row (icon + label) drew unstyled. It now resolves the
+  `.uss` relative to its own source file via `PathUtils.RelativePath`, so it
+  survives the package being embedded or renamed.
+
+### Performance
+- **Messages Console no longer trims its visible log one row at a time.** When
+  the filtered log overran capacity it called `List.RemoveAt(0)` per overflowing
+  record — an O(n) shift each, O(n²) under steady traffic. It now lets the list
+  run a small margin past capacity and drops the whole overflow in one
+  `RemoveRange`. Editor-only; no behavior change.
+
 ## [1.1.0] - 2026-06-12
 
 ### Changed

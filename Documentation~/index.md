@@ -21,7 +21,7 @@ hot-path workloads where a single GC spike means a dropped frame.
 | 🪙 **Disposable subscriptions** | `Subscribe` returns a `Subscription` — dispose it, bag it, or `.AddTo(this)`; no `-=`, no delegate-equality footguns |
 | 🧭 **Events vs Commands** | `IEvent` for N:M notifications, `ICommand` for 1:1 intent — CQRS enforced at runtime |
 | 🎮 **XR-aware** | No GC roots on the hot path, profiler markers on every public entry point |
-| 🛠️ **Editor tooling** | Live Messages Console, a `Project Settings ▸ Tutan ▸ Messages` page with an embedded command → handler audit, and serialized `EventReference` / `CommandReference` for inspector wiring |
+| 🛠️ **Editor tooling** | Live Messages Console and serialized `EventReference` / `CommandReference` for inspector wiring |
 
 ---
 
@@ -36,5 +36,5 @@ hot-path workloads where a single GC spike means a dropped frame.
 | ⚡ | [Performance](Performance) | Cost table, allocation contract, pre-warming recipe |
 | ⚠️ | [Edge Cases](EdgeCases) | Reentrant publish, subscribe/unsubscribe during dispatch, exceptions |
 | 🏛️ | [Architecture](Architecture) | When to reach for the bus and when not to |
-| 🚀 | [Bootstrap](Bootstrap) | Auto-install drainers, auto-install command bus, the settings page that drives them |
-| 🛠️ | [Editor Tooling](Editor) | Project Settings page, Messages Console window, commands authoring view, inspector-serializable references |
+| 🚀 | [Bootstrap](Bootstrap) | Automatic queue draining and explicit command-handler binding |
+| 🛠️ | [Editor Tooling](Editor) | Messages Console window and inspector-serializable references |

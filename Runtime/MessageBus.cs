@@ -63,6 +63,11 @@ namespace Tutan.Messages
         public abstract int SubscriberCount { get; }
         public abstract bool RemoveEntry(int tokenId);
         internal abstract IEnumerable<(int TokenId, Delegate Handler)> EnumerateEntries();
+
+        // Non-generic dispatch seam for the editor synthetic-publish path, where
+        // the message type is only known at runtime. Lets the bus avoid
+        // MakeGenericMethod reflection by unboxing once inside Channel<T>.
+        internal abstract void PublishBoxed(object message);
     }
 
     /// <summary>
@@ -128,6 +133,14 @@ namespace Tutan.Messages
                 if (_dispatchDepth == 0)
                     CompactIfNeeded();
             }
+        }
+
+        internal override void PublishBoxed(object message)
+        {
+            // The channel is keyed by typeof(T) and the caller looked it up by
+            // message.GetType(), so this unbox is always valid.
+            var m = (T)message;
+            Publish(ref m);
         }
 
         public void Enqueue(in T message)
@@ -237,6 +250,13 @@ namespace Tutan.Messages
     /// are main-thread only. Enqueue() is thread-safe and may race with any
     /// main-thread call: channel creation goes through a ConcurrentDictionary,
     /// and the message lands in a per-channel ConcurrentQueue.
+    /// <para>
+    /// One carve-out: replacing the bus wholesale — the static <c>EventBus.Reset</c>/
+    /// <c>CommandBus.Reset</c>/<c>CommandBus.Install</c> swap — is *not* safe to race
+    /// against a worker-thread Enqueue, which can land its message in the discarded
+    /// instance. Quiesce workers before resetting or re-installing; both are
+    /// composition-root operations, not steady-state ones. See Documentation~/Threading.md.
+    /// </para>
     /// </summary>
     public class MessageBus<TBase> : IDisposable, ISubscriptionOwner where TBase : IMessage
     {
@@ -253,6 +273,12 @@ namespace Tutan.Messages
         readonly List<ChannelBase> _drainList = new();
 
         int _nextTokenId;
+
+        // Guards only the double-Dispose(bool) path — it is not a "bus is unusable"
+        // flag, and the entry points deliberately do not throw ObjectDisposedException.
+        // The static buses (EventBus/CommandBus) always swap in a fresh instance on
+        // Reset/Install, so a disposed bus is never published to again; reuse of a
+        // disposed instance isn't a real scenario.
         bool _disposed;
 
         // Used by the optional instrumentation layer to tag records as
@@ -339,6 +365,27 @@ namespace Tutan.Messages
         public void Publish<T>(T message) where T : unmanaged, TBase
         {
             Publish(ref message);
+        }
+
+        /// <summary>
+        /// Publish a boxed message whose concrete type is only known at runtime —
+        /// the editor synthetic-publish path. One unbox inside the channel; never
+        /// used on the hot path. Main thread only. A type with no channel (nobody
+        /// has subscribed) is recorded and then a no-op, same as the generic path.
+        /// </summary>
+        internal void PublishBoxed(object message)
+        {
+            if (message == null) throw new ArgumentNullException(nameof(message));
+            MainThreadGuard.AssertMainThread("Publish");
+
+            var type = message.GetType();
+            _channels.TryGetValue(type, out var channelBase);
+            MessagesInstrumentation.RecordPublishBoxed(_instrumentationKind, type, message, channelBase);
+
+            if (channelBase == null) return;
+
+            using var _ = s_publishMarker.Auto();
+            channelBase.PublishBoxed(message);
         }
 
         /// <summary>
@@ -435,7 +482,14 @@ namespace Tutan.Messages
         }
 
         /// <summary>
-        /// Clear all subscriptions and queued messages.
+        /// Clear all subscriptions and queued messages on <em>this</em> instance, in place.
+        /// <para>
+        /// Note the difference from the static <c>EventBus.Reset</c>/<c>CommandBus.Reset</c>,
+        /// which dispose this instance and swap in a fresh one. After that swap, existing
+        /// <see cref="Subscription"/> handles target the discarded bus and their Dispose
+        /// becomes a harmless no-op (see SubscriptionTests.Dispose_AfterBusReset_*).
+        /// Clearing in place here leaves the instance live and reusable.
+        /// </para>
         /// </summary>
         public void Reset()
         {

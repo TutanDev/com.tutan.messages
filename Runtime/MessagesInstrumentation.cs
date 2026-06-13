@@ -172,6 +172,17 @@ namespace Tutan.Messages
                 bus, Op.Publish, typeof(T), 0, payload, null, null, CaptureSubscribers(channel)));
         }
 
+        // Non-generic counterpart to RecordPublish, for the editor synthetic-publish
+        // path where the message arrives already boxed and its type is a runtime value.
+        [Conditional("UNITY_EDITOR"), Conditional("TUTAN_MESSAGES_DEBUG")]
+        internal static void RecordPublishBoxed(BusKind bus, Type messageType, object payload, ChannelBase channel)
+        {
+            if (!Enabled) return;
+            Append(new Record(
+                DateTime.UtcNow.Ticks, CurrentFrame, Thread.CurrentThread.ManagedThreadId,
+                bus, Op.Publish, messageType, 0, payload, null, null, CaptureSubscribers(channel)));
+        }
+
         [Conditional("UNITY_EDITOR"), Conditional("TUTAN_MESSAGES_DEBUG")]
         internal static void RecordEnqueue<T>(BusKind bus, in T message, ChannelBase channel) where T : unmanaged, IMessage
         {

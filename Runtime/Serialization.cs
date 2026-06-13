@@ -1,5 +1,4 @@
 using System;
-using System.Linq;
 using UnityEngine;
 
 namespace Tutan.Messages
@@ -45,10 +44,40 @@ namespace Tutan.Messages
         public string TypeName => typeName;
         public bool IsValid => !string.IsNullOrEmpty(typeName);
 
-        public Type GetMessageType() => IsValid ? Type.GetType(typeName) : null;
+        public Type GetMessageType() => IsValid ? ResolveType(typeName) : null;
 
         /// <summary>
-        /// Creates an instance of the message from serialized data.
+        /// Resolve a stored (assembly-qualified) type name resiliently. Tries the
+        /// direct <see cref="Type.GetType(string,bool)"/> first, then falls back to
+        /// scanning loaded assemblies so resolution still succeeds if the
+        /// assembly's version/identity has drifted since the name was serialized.
+        /// </summary>
+        static Type ResolveType(string name)
+        {
+            if (string.IsNullOrEmpty(name)) return null;
+
+            var found = Type.GetType(name, false);
+            if (found != null) return found;
+
+            foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
+            {
+                found = asm.GetType(name, false);
+                if (found != null) return found;
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Publish the serialized message to its bus. Implemented per message
+        /// category (event vs command).
+        /// </summary>
+        public abstract void Publish();
+
+        /// <summary>
+        /// Creates an instance of the message from serialized data. The returned
+        /// message carries exactly the values authored in the inspector — no fields
+        /// are populated implicitly.
         /// Note: This boxes the struct.
         /// </summary>
         public object CreateMessage()
@@ -56,23 +85,9 @@ namespace Tutan.Messages
             var type = GetMessageType();
             if (type == null) return null;
 
-            object msg = string.IsNullOrEmpty(dataJson)
+            return string.IsNullOrEmpty(dataJson)
                 ? Activator.CreateInstance(type)
                 : JsonUtility.FromJson(dataJson, type);
-
-            // Fill Timestamp if the field exists
-            var timestampField = type.GetField("Timestamp", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.IgnoreCase);
-            if (timestampField != null)
-            {
-                if (timestampField.FieldType == typeof(float))
-                    timestampField.SetValue(msg, Time.time);
-                else if (timestampField.FieldType == typeof(double))
-                    timestampField.SetValue(msg, (double)Time.time);
-                else if (timestampField.FieldType == typeof(long))
-                    timestampField.SetValue(msg, DateTime.UtcNow.Ticks);
-            }
-
-            return msg;
         }
 }
 
@@ -85,17 +100,11 @@ namespace Tutan.Messages
         /// <summary>
         /// Publishes the serialized event to the <see cref="EventBus"/>.
         /// </summary>
-        public void Publish()
+        public override void Publish()
         {
             var msg = CreateMessage();
-            if (msg is IEvent ev)
-            {
-                // EventBus.Publish<T>(T message)
-                var method = typeof(EventBus).GetMethods(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static)
-                    .FirstOrDefault(m => m.Name == "Publish" && m.IsGenericMethod && m.GetParameters().Length == 1 && !m.GetParameters()[0].ParameterType.IsByRef);
-                
-                method?.MakeGenericMethod(ev.GetType()).Invoke(null, new[] { msg });
-            }
+            if (msg is IEvent)
+                EventBus.Bus.PublishBoxed(msg);
         }
     }
 
@@ -108,17 +117,11 @@ namespace Tutan.Messages
         /// <summary>
         /// Publishes the serialized command to the <see cref="CommandBus"/>.
         /// </summary>
-        public void Publish()
+        public override void Publish()
         {
             var msg = CreateMessage();
-            if (msg is ICommand cmd)
-            {
-                // CommandBus.Publish<T>(T message)
-                var method = typeof(CommandBus).GetMethods(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static)
-                    .FirstOrDefault(m => m.Name == "Publish" && m.IsGenericMethod && m.GetParameters().Length == 1 && !m.GetParameters()[0].ParameterType.IsByRef);
-
-                method?.MakeGenericMethod(cmd.GetType()).Invoke(null, new[] { msg });
-            }
+            if (msg is ICommand)
+                CommandBus.Bus.PublishBoxed(msg);
         }
     }
 }

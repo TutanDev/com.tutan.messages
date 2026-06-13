@@ -28,7 +28,10 @@ namespace Tutan.Messages.Editor
         public static readonly string labelUssClassName = ussClassName + "__label";
         public static readonly string missingUssClassName = ussClassName + "--missing";
 
-        const string UssPath = "Packages/com.tutan.messages/Editor/ScriptFileField.uss";
+        // Resolved from this source file's location (via [CallerFilePath]) so it
+        // survives the package being embedded or renamed. The .uss lives next to
+        // this .cs with a matching base name.
+        static readonly string UssPath = PathUtils.RelativePath(".uss");
 
         readonly Image _icon;
         readonly Label _label;

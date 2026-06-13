@@ -28,6 +28,14 @@ var subscription = EventBus.Subscribe<PlayerScored>(
 
 // 3. Publish — zero allocations
 EventBus.Publish(new PlayerScored { Points = 100, Timestamp = Time.time });
+```
+
+> **Messages must be `unmanaged`** — no `string`, arrays, or other reference-type
+> fields. For string-like data use `Unity.Collections.FixedString*` (e.g.
+> `FixedString64Bytes`) or store an int handle. See
+> [`Documentation~/Messages.md`](Documentation~/Messages.md#messages) for details.
+
+```csharp
 
 // 4. Unsubscribe by disposing (no delegate-equality footguns)…
 subscription.Dispose();
