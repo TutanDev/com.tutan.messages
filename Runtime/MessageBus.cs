@@ -59,7 +59,7 @@ namespace Tutan.Messages
     /// </summary>
     internal abstract class ChannelBase
     {
-        public abstract void DrainQueue();
+        public abstract void DrainQueue(MessagesInstrumentation.BusKind kind);
         public abstract int SubscriberCount { get; }
         public abstract bool RemoveEntry(int tokenId);
         internal abstract IEnumerable<(int TokenId, Delegate Handler)> EnumerateEntries();
@@ -144,7 +144,7 @@ namespace Tutan.Messages
             queue.Enqueue(message);
         }
 
-        public override void DrainQueue()
+        public override void DrainQueue(MessagesInstrumentation.BusKind kind)
         {
             // Volatile so a queue created by a worker thread is visible here at
             // the latest one frame after its first Enqueue. IsEmpty is the O(1)
@@ -159,7 +159,15 @@ namespace Tutan.Messages
             // would let a self-perpetuating handler hang the frame forever.
             int budget = queue.Count;
             while (budget-- > 0 && queue.TryDequeue(out var msg))
+            {
+                // A drained message is being dispatched now, so record it as a
+                // Publish — immediate Publish records in MessageBus.Publish, but
+                // that path is bypassed here, so the dispatch would otherwise be
+                // invisible to the Messages Console. [Conditional]-stripped in
+                // release, same as every other Record* call.
+                MessagesInstrumentation.RecordPublish(kind, ref msg, this);
                 Publish(ref msg);
+            }
         }
 
         public void AddEntry(int tokenId, MessageHandler<T> handler)
@@ -367,7 +375,7 @@ namespace Tutan.Messages
             }
 
             for (int i = 0; i < _drainList.Count; i++)
-                _drainList[i].DrainQueue();
+                _drainList[i].DrainQueue(_instrumentationKind);
 
             MessagesInstrumentation.RecordDrain(_instrumentationKind, start: false);
         }
