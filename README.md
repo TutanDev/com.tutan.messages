@@ -79,7 +79,7 @@ One sample included, importable from the Package Manager:
 
 ## Full documentation
 
-See [`docs/index.md`](docs/index.md) for the complete documentation site —
+See [`Documentation~/index.md`](Documentation~/index.md) for the complete documentation site —
 API reference, threading model, performance characteristics, edge-case
 behavior, architectural guidance, and editor tooling.
 
