@@ -4,6 +4,22 @@ All notable changes to `com.tutan.messages` will be documented in this file.
 
 ## [1.2.1] - 2026-06-13
 
+### Fixed
+- **`EventReference`/`CommandReference` and `[EventType]`/`[CommandType]` no longer
+  silently blank a stored type that can't be matched.** The drawers selected the
+  current entry with `values.IndexOf(storedAssemblyQualifiedName)`, a raw-string
+  match against the live type list. That missed two cases and snapped the popup to
+  `(None)` in both: a type whose assembly identity had *drifted* since serialization
+  (still resolvable, but its `AssemblyQualifiedName` string no longer matched), and a
+  type that had been renamed/moved/deleted. The first is now matched by resolved
+  `Type` identity — consistent with the drift-tolerant resolution already in
+  `ScriptFileField`/`MessageReference` — so a still-valid reference selects correctly.
+  The second is surfaced: the orphaned value is kept, shown as a trailing
+  `(Missing) <Type>` entry, and called out with a warning `HelpBox`, and the
+  reference's synthetic Publish button is disabled until a resolvable type is picked.
+  Previously the stored value looked like an empty field and was overwritten the
+  moment the dropdown was touched.
+
 ### Docs
 - **Corrected the minimum Unity version in `Documentation~/Messages.md`.** It
   still claimed "Unity 2021.3 LTS and newer", contradicting `package.json`

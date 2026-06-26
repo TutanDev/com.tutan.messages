@@ -38,7 +38,7 @@ namespace Tutan.Messages.Editor
             var values = types.Select(t => t.AssemblyQualifiedName).ToList();
             values.Insert(0, string.Empty);
 
-            var currentIndex = Math.Max(0, values.IndexOf(property.stringValue));
+            var currentIndex = ResolveSelection(property.stringValue, types, values, labels, out bool missing);
 
             // The popup is index-based: two types can share a short name (same
             // struct name, different namespace), so mapping the selection back
@@ -53,6 +53,8 @@ namespace Tutan.Messages.Editor
             });
 
             container.Add(popup);
+            if (missing)
+                container.Add(MissingTypeWarning(property.stringValue));
             return container;
         }
 
@@ -69,6 +71,60 @@ namespace Tutan.Messages.Editor
             var labels = types.Select(t => duplicated.Contains(t.Name) ? t.FullName : t.Name).ToList();
             labels.Insert(0, "(None)");
             return labels;
+        }
+
+        // Resolve which popup entry a stored type string should select. Three cases:
+        //   • empty                          → (None) at index 0.
+        //   • matches a listed type — by exact string, or by resolved Type identity
+        //     when the stored assembly-qualified name has drifted (assembly version
+        //     changed) but still resolves → that type's entry.
+        //   • unresolved or no longer listed → a trailing "(Missing) …" entry is
+        //     appended to `labels`/`values` and selected, so the orphaned value stays
+        //     visible and is preserved instead of snapping silently to (None).
+        // Matching by Type identity (not raw string) mirrors the drift-tolerant
+        // resolution in ScriptFileField/MessageReference, so a still-valid reference
+        // never reads as missing just because its assembly identity moved. Appends at
+        // most one entry to `labels`/`values`; sets `missing` for the third case so
+        // callers can warn and gate actions.
+        internal static int ResolveSelection(
+            string stored, List<Type> types, List<string> values, List<string> labels, out bool missing)
+        {
+            missing = false;
+            if (string.IsNullOrEmpty(stored)) return 0;
+
+            int exact = values.IndexOf(stored);
+            if (exact >= 0) return exact;
+
+            var resolved = ScriptFileField.ResolveType(stored);
+            if (resolved != null)
+            {
+                int t = types.IndexOf(resolved);
+                if (t >= 0) return t + 1; // +1 for the "(None)" entry at index 0.
+            }
+
+            missing = true;
+            string shown = resolved != null ? resolved.FullName : stored;
+            labels.Add($"(Missing) {ShortName(shown)}");
+            values.Add(stored);
+            return values.Count - 1;
+        }
+
+        // A warning shown beneath the popup when the stored type can't be resolved,
+        // so an orphaned reference is obvious instead of looking like an empty field.
+        internal static HelpBox MissingTypeWarning(string stored) => new HelpBox(
+            $"Stored message type '{ShortName(stored)}' could not be found — it may have been " +
+            "renamed, moved, or deleted. The reference is preserved; pick a type to replace it.",
+            HelpBoxMessageType.Warning);
+
+        // Last path segment of a stored type string for compact display:
+        // "Namespace.Type, Assembly, Version=…" → "Type".
+        static string ShortName(string stored)
+        {
+            if (string.IsNullOrEmpty(stored)) return stored;
+            int comma = stored.IndexOf(',');
+            string full = comma >= 0 ? stored.Substring(0, comma).Trim() : stored;
+            int dot = full.LastIndexOf('.');
+            return dot >= 0 ? full.Substring(dot + 1) : full;
         }
     }
 
@@ -102,7 +158,8 @@ namespace Tutan.Messages.Editor
             var values = types.Select(t => t.AssemblyQualifiedName).ToList();
             values.Insert(0, string.Empty);
 
-            int currentIndex = Math.Max(0, values.IndexOf(typeNameProp.stringValue));
+            int currentIndex = MessageTypeDrawer.ResolveSelection(
+                typeNameProp.stringValue, types, values, labels, out bool missing);
 
             // Index-based for the same reason as MessageTypeDrawer: duplicate
             // short names must not resolve to the first match.
@@ -149,6 +206,11 @@ namespace Tutan.Messages.Editor
 
             headerRow.Add(publishBtn);
             root.Add(headerRow);
+
+            // An unresolved stored type can't be published — gate the button and say why.
+            publishBtn.SetEnabled(!missing && !string.IsNullOrEmpty(typeNameProp.stringValue));
+            if (missing)
+                root.Add(MessageTypeDrawer.MissingTypeWarning(typeNameProp.stringValue));
 
             var dataContainer = new VisualElement();
             dataContainer.style.marginLeft = 15;
