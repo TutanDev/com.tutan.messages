@@ -91,22 +91,22 @@ namespace Tutan.Messages
         }
 
         /// <summary>Dispatch a command immediately to its single handler. Main thread only. Zero allocation.</summary>
-        public static void Publish<T>(ref T message) where T : unmanaged, ICommand
+        public static void Publish<T>(ref T message) where T : struct, ICommand
             => s_bus.Publish(ref message);
 
         /// <summary>Convenience overload. One struct copy — acceptable for small messages.</summary>
-        public static void Publish<T>(T message) where T : unmanaged, ICommand
+        public static void Publish<T>(T message) where T : struct, ICommand
             => s_bus.Publish(ref message); // ref: the copy already happened into this parameter
 
         /// <summary>Enqueue a command for deferred dispatch on the next DrainQueues() call. Thread-safe.</summary>
-        public static void Enqueue<T>(in T message) where T : unmanaged, ICommand
+        public static void Enqueue<T>(in T message) where T : struct, ICommand
             => s_bus.Enqueue(in message);
 
         /// <summary>Process all queued commands. Call once per frame from MessagesHost or a PlayerLoop callback.</summary>
         public static void DrainQueues() => s_bus.DrainQueues();
 
         /// <summary>Number of active handlers for command type T (0 or 1).</summary>
-        public static int GetSubscriberCount<T>() where T : unmanaged, ICommand => s_bus.GetSubscriberCount<T>();
+        public static int GetSubscriberCount<T>() where T : struct, ICommand => s_bus.GetSubscriberCount<T>();
 
         /// <summary>Number of registered channel types.</summary>
         public static int ChannelCount => s_bus.ChannelCount;

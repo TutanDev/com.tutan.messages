@@ -16,11 +16,11 @@ hot-path workloads where a single GC spike means a dropped frame.
 
 | | |
 |---|---|
-| 🎯 **Zero-alloc dispatch** | Messages are `unmanaged struct`s, delivered to handlers as `ref T` — no boxing, no copies |
+| 🎯 **Zero-alloc dispatch** | Messages are `struct`s, delivered to handlers as `ref T` — no boxing, no copies |
 | 🧵 **Thread-safe queueing** | `Enqueue` from any thread; the main thread drains in `LateUpdate` |
 | 🪙 **Disposable subscriptions** | `Subscribe` returns a `Subscription` — dispose it, bag it, or `.AddTo(this)`; no `-=`, no delegate-equality footguns |
 | 🧭 **Events vs Commands** | `IEvent` for N:M notifications, `ICommand` for 1:1 intent — CQRS enforced at runtime |
-| 🎮 **XR-aware** | No GC roots on the hot path, profiler markers on every public entry point |
+| 🎮 **XR-aware** | Zero-allocation dispatch on the hot path, profiler markers on every public entry point |
 | 🛠️ **Editor tooling** | Live Messages Console and serialized `EventReference` / `CommandReference` for inspector wiring |
 
 ---

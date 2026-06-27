@@ -163,7 +163,7 @@ namespace Tutan.Messages
         // [Conditional] strips these at the call site in release builds.
 
         [Conditional("UNITY_EDITOR"), Conditional("TUTAN_MESSAGES_DEBUG")]
-        internal static void RecordPublish<T>(BusKind bus, ref T message, ChannelBase channel) where T : unmanaged, IMessage
+        internal static void RecordPublish<T>(BusKind bus, ref T message, ChannelBase channel) where T : struct, IMessage
         {
             if (!Enabled) return;
             object payload =  message;
@@ -184,7 +184,7 @@ namespace Tutan.Messages
         }
 
         [Conditional("UNITY_EDITOR"), Conditional("TUTAN_MESSAGES_DEBUG")]
-        internal static void RecordEnqueue<T>(BusKind bus, in T message, ChannelBase channel) where T : unmanaged, IMessage
+        internal static void RecordEnqueue<T>(BusKind bus, in T message, ChannelBase channel) where T : struct, IMessage
         {
             if (!Enabled) return;
             object payload = message;

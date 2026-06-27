@@ -2,6 +2,33 @@
 
 All notable changes to `com.tutan.messages` will be documented in this file.
 
+## [1.3.0] - 2026-06-26
+
+### Changed
+- **Message types now only require `where T : struct` (was `unmanaged`).** This
+  relaxes the constraint across `EventBus`, `CommandBus`, `MessageBus<TBase>`,
+  `CommandRegistry`, and `MessageHandler<T>`. The `IEvent`/`ICommand`/`IMessage`
+  marker requirement is unchanged, so all existing messages keep compiling
+  (`unmanaged` is a strict subset of `struct`) — this is a source-compatible,
+  additive change.
+- **Messages may now carry reference-type fields** (`string`, arrays,
+  collections, class payloads), which the old constraint forbade. This unblocks
+  real-world payloads that previously needed a `FixedString` or an int handle.
+
+### Performance
+- **Dispatch remains zero-allocation.** The guarantee was always delivered by
+  generic specialization plus `ref`-passing, not by blittability — the message
+  is never boxed or heap-stored on either the immediate or deferred path,
+  regardless of its fields.
+
+### Notes
+- A message that carries reference-type fields is **not** free: while it sits in
+  the deferred queue it is a GC root the collector must scan during the mark
+  phase (a scan cost, not an allocation), and `Enqueue` copies the struct
+  *shallowly* — a worker thread shares any referenced object with the main
+  thread that drains it. Prefer value-only messages on hot or cross-thread
+  paths. See `Documentation~/Performance.md` and `Documentation~/Threading.md`.
+
 ## [1.2.1] - 2026-06-13
 
 ### Fixed

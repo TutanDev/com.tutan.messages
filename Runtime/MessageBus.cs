@@ -20,7 +20,7 @@ namespace Tutan.Messages
     /// <summary>
     /// Handler delegate. Ref parameter avoids struct copy on dispatch.
     /// </summary>
-    public delegate void MessageHandler<T>(ref T message) where T : unmanaged, IMessage;
+    public delegate void MessageHandler<T>(ref T message) where T : struct, IMessage;
 
     /// <summary>
     /// Editor / development-build check that the main-thread-only entry points
@@ -74,7 +74,7 @@ namespace Tutan.Messages
     /// Typed channel holding subscriptions and a pending queue for type T.
     /// Internal — never exposed to consumers.
     /// </summary>
-    internal sealed class Channel<T> : ChannelBase where T : unmanaged, IMessage
+    internal sealed class Channel<T> : ChannelBase where T : struct, IMessage
     {
         internal struct Entry
         {
@@ -304,7 +304,7 @@ namespace Tutan.Messages
         /// unrelated subscription on the replacement bus.
         /// Main thread only. Virtual so subclasses can add pre-subscribe guards.
         /// </summary>
-        public virtual Subscription Subscribe<T>(MessageHandler<T> handler) where T : unmanaged, TBase
+        public virtual Subscription Subscribe<T>(MessageHandler<T> handler) where T : struct, TBase
         {
             if (handler == null) throw new ArgumentNullException(nameof(handler));
             MainThreadGuard.AssertMainThread("Subscribe");
@@ -342,7 +342,7 @@ namespace Tutan.Messages
         /// Dispatch message to all subscribers immediately (within current frame).
         /// Main thread only. Zero allocation.
         /// </summary>
-        public void Publish<T>(ref T message) where T : unmanaged, TBase
+        public void Publish<T>(ref T message) where T : struct, TBase
         {
             MainThreadGuard.AssertMainThread("Publish");
 
@@ -362,7 +362,7 @@ namespace Tutan.Messages
         /// Convenience overload for fire-and-forget publishing.
         /// One struct copy (caller → parameter), acceptable for small messages.
         /// </summary>
-        public void Publish<T>(T message) where T : unmanaged, TBase
+        public void Publish<T>(T message) where T : struct, TBase
         {
             Publish(ref message);
         }
@@ -392,7 +392,7 @@ namespace Tutan.Messages
         /// Enqueue a message for deferred dispatch on the next DrainQueues() call.
         /// Thread-safe. Use from worker threads, async callbacks, network handlers.
         /// </summary>
-        public void Enqueue<T>(in T message) where T : unmanaged, TBase
+        public void Enqueue<T>(in T message) where T : struct, TBase
         {
             var channel = GetOrCreateChannel<T>();
             MessagesInstrumentation.RecordEnqueue(_instrumentationKind, in message, channel);
@@ -427,7 +427,7 @@ namespace Tutan.Messages
             MessagesInstrumentation.RecordDrain(_instrumentationKind, start: false);
         }
 
-        public int GetSubscriberCount<T>() where T : unmanaged, TBase
+        public int GetSubscriberCount<T>() where T : struct, TBase
         {
             return _channels.TryGetValue(typeof(T), out var ch) ? ch.SubscriberCount : 0;
         }
@@ -449,7 +449,7 @@ namespace Tutan.Messages
                 yield return (kvp.Key, kvp.Value.EnumerateEntries());
         }
 
-        Channel<T> GetOrCreateChannel<T>() where T : unmanaged, TBase
+        Channel<T> GetOrCreateChannel<T>() where T : struct, TBase
         {
             // Fast path: lock-free read. Slow path on first use of T allocates a
             // Channel<T>; if two threads race, GetOrAdd ensures only one survives

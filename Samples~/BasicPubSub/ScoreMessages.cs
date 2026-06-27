@@ -15,7 +15,7 @@ namespace Tutan.Messages.Samples.BasicPubSub
     //                 listen. Here the HUD is the only subscriber, but adding a
     //                 second (logger, sound, analytics) needs no other change.
     //
-    // Both are unmanaged structs — the bus never boxes or allocates for them.
+    // Both are plain value-type structs — the bus never boxes or allocates for them.
 
 
 

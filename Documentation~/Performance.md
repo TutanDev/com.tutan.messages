@@ -17,6 +17,14 @@
 This happens during initialization, never during sustained runtime if
 pre-warmed.
 
+Dispatch is allocation-free for any message `struct` — the bus is generic over
+the message type and passes it by `ref`, so the message is never boxed. A
+message that carries reference-type fields (`string`, arrays, collections, class
+payloads) still dispatches without allocating, but while it sits in the deferred
+queue it is a GC root: the collector must scan it during the mark phase,
+proportional to the queued backlog. This is a scan cost, not an allocation.
+Prefer value-only fields on hot paths to keep the GC entirely out of the loop.
+
 ## Pre-warming
 
 To eliminate all runtime allocation, pre-warm channels at startup:

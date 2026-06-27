@@ -19,26 +19,26 @@ namespace Tutan.Messages
         /// <see cref="SubscriptionBag"/>, or tie it to a GameObject's lifetime with
         /// <c>.AddTo(this)</c>.
         /// </summary>
-        public static Subscription Subscribe<T>(MessageHandler<T> handler) where T : unmanaged, IEvent
+        public static Subscription Subscribe<T>(MessageHandler<T> handler) where T : struct, IEvent
             => s_bus.Subscribe(handler);
 
         /// <summary>Dispatch an event immediately to all subscribers. Main thread only. Zero allocation.</summary>
-        public static void Publish<T>(ref T message) where T : unmanaged, IEvent
+        public static void Publish<T>(ref T message) where T : struct, IEvent
             => s_bus.Publish(ref message);
 
         /// <summary>Convenience overload. One struct copy — acceptable for small messages.</summary>
-        public static void Publish<T>(T message) where T : unmanaged, IEvent
+        public static void Publish<T>(T message) where T : struct, IEvent
             => s_bus.Publish(ref message); // ref: the copy already happened into this parameter
 
         /// <summary>Enqueue an event for deferred dispatch on the next DrainQueues() call. Thread-safe.</summary>
-        public static void Enqueue<T>(in T message) where T : unmanaged, IEvent
+        public static void Enqueue<T>(in T message) where T : struct, IEvent
             => s_bus.Enqueue(in message);
 
         /// <summary>Process all queued events. Call once per frame from MessagesHost or a PlayerLoop callback.</summary>
         public static void DrainQueues() => s_bus.DrainQueues();
 
         /// <summary>Number of active subscriptions for message type T.</summary>
-        public static int GetSubscriberCount<T>() where T : unmanaged, IEvent => s_bus.GetSubscriberCount<T>();
+        public static int GetSubscriberCount<T>() where T : struct, IEvent => s_bus.GetSubscriberCount<T>();
 
         /// <summary>Number of registered channel types.</summary>
         public static int ChannelCount => s_bus.ChannelCount;

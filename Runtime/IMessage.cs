@@ -1,8 +1,14 @@
 namespace Tutan.Messages
 {
     /// <summary>
-    /// Marker interface for all message structs. Constrained to unmanaged at
-    /// the bus API level to guarantee no hidden heap references inside messages.
+    /// Marker interface for all message structs. The bus API constrains messages
+    /// to <c>struct</c>, so dispatch stays allocation-free (generic specialization
+    /// plus <c>ref</c>-passing, never boxed). Reference-type fields (strings,
+    /// collections, class payloads) are permitted, but note the trade-offs: a
+    /// queued message holding references adds GC mark-phase scan cost while it
+    /// sits in the queue, and a worker-thread <c>Enqueue</c> copies the struct
+    /// shallowly, so any referenced object is shared across threads. Prefer
+    /// value-type fields on hot or cross-thread paths.
     /// </summary>
     public interface IMessage { }
 

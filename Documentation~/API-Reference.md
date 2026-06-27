@@ -14,13 +14,13 @@ declared once at the composition root via `Install` — see
 
 The shared signatures below are written against `TBase`, the bus's message base
 type: it resolves to `IEvent` on `EventBus` and `ICommand` on `CommandBus`. So
-`EventBus.Publish<T>` constrains `T` to `unmanaged, IEvent`, and
-`CommandBus.Publish<T>` to `unmanaged, ICommand`.
+`EventBus.Publish<T>` constrains `T` to `struct, IEvent`, and
+`CommandBus.Publish<T>` to `struct, ICommand`.
 
 ## Subscribe (EventBus)
 
 ```csharp
-Subscription Subscribe<T>(MessageHandler<T> handler) where T : unmanaged, IEvent
+Subscription Subscribe<T>(MessageHandler<T> handler) where T : struct, IEvent
 ```
 
 Registers `handler` for messages of type `T`. Returns a disposable
@@ -31,8 +31,8 @@ unsubscribe. Main thread only. `EventBus` only — for commands, see
 ## Publish (Immediate)
 
 ```csharp
-void Publish<T>(ref T message)  where T : unmanaged, TBase
-void Publish<T>(T message)      where T : unmanaged, TBase  // convenience, one copy
+void Publish<T>(ref T message)  where T : struct, TBase
+void Publish<T>(T message)      where T : struct, TBase  // convenience, one copy
 ```
 
 Dispatches `message` synchronously to all active subscribers of type `T`. The
@@ -46,7 +46,7 @@ Main thread only. If no subscribers exist for `T`, returns immediately
 ## Enqueue (Deferred)
 
 ```csharp
-void Enqueue<T>(in T message) where T : unmanaged, TBase
+void Enqueue<T>(in T message) where T : struct, TBase
 ```
 
 Adds `message` to the internal queue for type `T`. Thread-safe via
@@ -111,7 +111,7 @@ No handle field, no `OnDestroy`. Details and trade-offs in
 ## Diagnostics
 
 ```csharp
-int GetSubscriberCount<T>() where T : unmanaged, TBase
+int GetSubscriberCount<T>() where T : struct, TBase
 int ChannelCount { get; }
 ```
 
@@ -143,7 +143,7 @@ readonly struct InstallResult
 Inside the callback, bind each command with the `CommandRegistry` builder:
 
 ```csharp
-CommandRegistry Handle<T>(MessageHandler<T> handler) where T : unmanaged, ICommand
+CommandRegistry Handle<T>(MessageHandler<T> handler) where T : struct, ICommand
 ```
 
 ```csharp

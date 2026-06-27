@@ -28,7 +28,7 @@ namespace Tutan.Messages
         /// <typeparamref name="T"/>. Fluent — chain calls for each command. A duplicate
         /// command type or a null handler is recorded as an install error rather than thrown.
         /// </summary>
-        public CommandRegistry Handle<T>(MessageHandler<T> handler) where T : unmanaged, ICommand
+        public CommandRegistry Handle<T>(MessageHandler<T> handler) where T : struct, ICommand
         {
             if (handler == null)
             {

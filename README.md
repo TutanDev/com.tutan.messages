@@ -1,7 +1,7 @@
 # Messages — Zero-Alloc Pub/Sub for Unity
 
-A struct-based, ref-passed, GC-free message bus designed for Unity 6 and XR
-frame budgets. Drop it in, publish events, never allocate.
+A struct-based, ref-passed message bus designed for Unity 6 and XR frame
+budgets. Drop it in, publish events, and dispatch never allocates.
 
 ## Why
 
@@ -15,7 +15,7 @@ zero-allocation by design.**
 ```csharp
 using Tutan.Messages;
 
-// 1. Define a message — must be unmanaged struct
+// 1. Define a message — must be a struct
 public struct PlayerScored : IEvent
 {
     public int Points;
@@ -30,9 +30,13 @@ var subscription = EventBus.Subscribe<PlayerScored>(
 EventBus.Publish(new PlayerScored { Points = 100, Timestamp = Time.time });
 ```
 
-> **Messages must be `unmanaged`** — no `string`, arrays, or other reference-type
-> fields. For string-like data use `Unity.Collections.FixedString*` (e.g.
-> `FixedString64Bytes`) or store an int handle. See
+> **Messages must be a `struct`.** Reference-type fields (`string`, arrays,
+> class payloads) are allowed, but they carry two costs: a *queued* message that
+> holds references adds GC mark-phase scan cost while it waits to be drained, and
+> a worker-thread `Enqueue` copies the struct shallowly, so any referenced object
+> is shared across threads. Prefer value-type fields on hot or cross-thread
+> paths — for string-like data, `Unity.Collections.FixedString*` (e.g.
+> `FixedString64Bytes`) or an int handle keeps the message fully value-typed. See
 > [`Documentation~/Messages.md`](Documentation~/Messages.md#messages) for details.
 
 ```csharp

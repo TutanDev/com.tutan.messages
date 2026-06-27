@@ -33,7 +33,8 @@ XR headsets render at 72–120 Hz with hard frame deadlines. A single GC spike
 of even 1–2 ms can cause a dropped frame, directly causing user discomfort.
 This drives every design decision:
 
-- **Messages are `unmanaged struct`** — no heap allocation, no GC roots.
+- **Messages are `struct`** — generic specialization plus `ref`-passing keeps
+  dispatch allocation-free; the message is never boxed or heap-stored.
 - **Handlers receive `ref T`** — no struct copy on dispatch.
 - **Subscription uses integer tokens** — no delegate equality problems.
 - **No multicast delegates** — `Delegate.Combine` allocates.
@@ -45,13 +46,13 @@ This drives every design decision:
 
 ### Messages
 
-A message is any `unmanaged struct` implementing `IEvent` or `ICommand` (both
-extend `IMessage`). The `unmanaged` constraint guarantees no managed references
-(no `string`, no arrays, no class fields), making the struct blittable and
-GC-invisible.
+A message is any `struct` implementing `IEvent` or `ICommand` (both extend
+`IMessage`). Dispatch is allocation-free for any struct: the bus is generic over
+the message type and passes it by `ref`, so the message is never boxed or
+heap-stored.
 
 ```csharp
-// Correct — all fields are unmanaged
+// Recommended — all fields are value types (no GC scan, safe across threads)
 public struct HandTrackingLost : IEvent
 {
     public int HandIndex;       // 0 = left, 1 = right
@@ -59,7 +60,7 @@ public struct HandTrackingLost : IEvent
     public float Confidence;
 }
 
-// Correct — fixed buffers are unmanaged
+// Also fine — fixed buffers stay value-typed
 public struct NetworkPacketReceived : IEvent
 {
     public int PacketId;
@@ -67,16 +68,28 @@ public struct NetworkPacketReceived : IEvent
     public unsafe fixed byte Header[16];
 }
 
-// COMPILE ERROR — string is a managed reference
-public struct BadMessage : IEvent
+// Allowed, with caveats — reference-type fields are permitted
+public struct LogLine : IEvent
 {
-    public string Name; // won't compile: not unmanaged
+    public string Text;   // reference field: see the trade-offs below
+    public int Level;
 }
 ```
 
-**If you need string-like data**, use `Unity.Collections.FixedString64Bytes`
-(from `com.unity.collections`) or store an integer handle that indexes into
-a separate lookup table.
+**Reference-type fields are allowed but not free.** Two caveats apply when a
+message carries a `string`, array, collection, or class reference:
+
+- A message sitting in the deferred queue is a GC root — the garbage collector
+  must scan it during the mark phase for as long as it waits to be drained. This
+  is a scan cost, not an allocation, and dispatch itself stays allocation-free.
+- `Enqueue` copies the struct *shallowly*. A worker thread that enqueues a
+  message shares any referenced object with the main thread that drains it, so
+  treat such payloads as immutable handoffs.
+
+For hot or cross-thread paths, prefer value-only messages. **If you need
+string-like data**, use `Unity.Collections.FixedString64Bytes` (from
+`com.unity.collections`) or store an integer handle that indexes into a separate
+lookup table — both keep the message fully value-typed.
 
 ### Events vs Commands
 
@@ -91,7 +104,7 @@ a separate lookup table.
 ### Handlers
 
 ```csharp
-public delegate void MessageHandler<T>(ref T message) where T : unmanaged, IMessage;
+public delegate void MessageHandler<T>(ref T message) where T : struct, IMessage;
 ```
 
 The `ref` parameter is critical — it eliminates the struct copy that would
