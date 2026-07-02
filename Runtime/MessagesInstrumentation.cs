@@ -17,14 +17,24 @@ using System.Threading;
 
 namespace Tutan.Messages
 {
+    /// <summary>
+    /// Optional observation layer over both buses: while <see cref="Enabled"/> is
+    /// true, every subscribe/unsubscribe/publish/enqueue (and optionally drain) is
+    /// appended to a thread-safe ring buffer that the Messages Console — or your
+    /// own diagnostics via <see cref="Snapshot()"/> — can poll. Compiled into
+    /// editor and <c>TUTAN_MESSAGES_DEBUG</c> builds only; in release player
+    /// builds every hook call site is stripped and this type is never touched.
+    /// </summary>
     public static class MessagesInstrumentation
     {
+        /// <summary>Which bus produced a record.</summary>
         public enum BusKind : byte
         {
             Event = 0,
             Command = 1
         }
 
+        /// <summary>The bus operation a record captures.</summary>
         public enum Op : byte
         {
             Publish,
@@ -42,8 +52,13 @@ namespace Tutan.Messages
         /// </summary>
         public readonly struct Subscriber
         {
+            /// <summary>The subscription's token id, as shown by Subscribe records.</summary>
             public readonly int TokenId;
+
+            /// <summary>Full type name of the handler's target object, or "(static)".</summary>
             public readonly string Target;
+
+            /// <summary>Name of the handler method.</summary>
             public readonly string Method;
 
             internal Subscriber(int tokenId, string target, string method)
@@ -54,17 +69,37 @@ namespace Tutan.Messages
             }
         }
 
+        /// <summary>One captured bus operation, frozen at the instant it happened.</summary>
         public readonly struct Record
         {
+            /// <summary>UTC timestamp (<see cref="DateTime.Ticks"/>) of the operation.</summary>
             public readonly long TimestampTicks;
+
+            /// <summary>Main-thread frame count at the time of the operation (see <see cref="SyncFrame"/>).</summary>
             public readonly int Frame;
+
+            /// <summary>Managed id of the thread the operation ran on.</summary>
             public readonly int ThreadId;
+
+            /// <summary>Which bus produced the record.</summary>
             public readonly BusKind Bus;
+
+            /// <summary>The captured operation.</summary>
             public readonly Op Op;
+
+            /// <summary>The message type; null for drain records.</summary>
             public readonly Type MessageType;
+
+            /// <summary>Subscription token id for Subscribe/Unsubscribe records; 0 otherwise.</summary>
             public readonly int TokenId;
+
+            /// <summary>The boxed message for Publish/Enqueue records; null otherwise.</summary>
             public readonly object PayloadBox;
+
+            /// <summary>Handler target type name for Subscribe records; null otherwise.</summary>
             public readonly string HandlerTarget;
+
+            /// <summary>Handler method name for Subscribe records; null otherwise.</summary>
             public readonly string HandlerMethod;
 
             /// <summary>
@@ -122,10 +157,20 @@ namespace Tutan.Messages
         static long s_totalEver; // monotonic, survives wraparound
         static readonly object s_lock = new object();
 
+        /// <summary>Ring-buffer capacity, in records.</summary>
         public static int Capacity => s_buffer.Length;
+
+        /// <summary>Number of valid records currently in the ring buffer.</summary>
         public static int Count { get { lock (s_lock) return s_count; } }
+
+        /// <summary>
+        /// Monotonic count of records ever appended. Unlike <see cref="Count"/> it
+        /// survives ring wraparound, so incremental consumers can diff it against
+        /// their last processed total to know how many trailing records are new.
+        /// </summary>
         public static long TotalEver => Interlocked.Read(ref s_totalEver);
 
+        /// <summary>Resize the ring buffer, discarding all current records. Minimum 16.</summary>
         public static void SetCapacity(int capacity)
         {
             if (capacity < 16) capacity = 16;
@@ -137,10 +182,25 @@ namespace Tutan.Messages
             }
         }
 
-        public static List<Record> Snapshot()
+        /// <summary>
+        /// Copy the ring buffer's records, oldest first. Allocates a new list per
+        /// call — poll it off the hot path.
+        /// </summary>
+        public static List<Record> Snapshot() => Snapshot(out _);
+
+        /// <summary>
+        /// Copy the ring buffer's records (oldest first) and report the value of
+        /// <see cref="TotalEver"/> that pairs exactly with them. Both are read under
+        /// one lock: reading <see cref="TotalEver"/> separately can run ahead of a
+        /// snapshot taken a moment later while worker threads are appending, which
+        /// makes an incremental consumer duplicate the records in between and drop
+        /// an equal number of older ones.
+        /// </summary>
+        public static List<Record> Snapshot(out long totalEver)
         {
             lock (s_lock)
             {
+                totalEver = s_totalEver;
                 var list = new List<Record>(s_count);
                 int start = (s_head - s_count + s_buffer.Length) % s_buffer.Length;
                 for (int i = 0; i < s_count; i++)
@@ -149,6 +209,7 @@ namespace Tutan.Messages
             }
         }
 
+        /// <summary>Discard all records. <see cref="TotalEver"/> is unaffected.</summary>
         public static void Clear()
         {
             lock (s_lock)

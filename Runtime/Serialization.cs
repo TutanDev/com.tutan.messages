@@ -89,7 +89,7 @@ namespace Tutan.Messages
                 ? Activator.CreateInstance(type)
                 : JsonUtility.FromJson(dataJson, type);
         }
-}
+    }
 
     /// <summary>
     /// Serialized reference to an <see cref="IEvent"/>.
@@ -98,13 +98,20 @@ namespace Tutan.Messages
     public class EventReference : MessageReference
     {
         /// <summary>
-        /// Publishes the serialized event to the <see cref="EventBus"/>.
+        /// Publishes the serialized event to the <see cref="EventBus"/>. If the
+        /// stored type cannot be resolved to an <see cref="IEvent"/> struct
+        /// (renamed, moved, or deleted since it was serialized), a warning is
+        /// logged and nothing is published.
         /// </summary>
         public override void Publish()
         {
             var msg = CreateMessage();
             if (msg is IEvent)
                 EventBus.Bus.PublishBoxed(msg);
+            else
+                Debug.LogWarning(
+                    $"Messages: EventReference could not publish '{typeName}' - the stored " +
+                    "type could not be resolved to an IEvent struct. Re-pick the type in the inspector.");
         }
     }
 
@@ -115,13 +122,20 @@ namespace Tutan.Messages
     public class CommandReference : MessageReference
     {
         /// <summary>
-        /// Publishes the serialized command to the <see cref="CommandBus"/>.
+        /// Publishes the serialized command to the <see cref="CommandBus"/>. If the
+        /// stored type cannot be resolved to an <see cref="ICommand"/> struct
+        /// (renamed, moved, or deleted since it was serialized), a warning is
+        /// logged and nothing is published.
         /// </summary>
         public override void Publish()
         {
             var msg = CreateMessage();
             if (msg is ICommand)
                 CommandBus.Bus.PublishBoxed(msg);
+            else
+                Debug.LogWarning(
+                    $"Messages: CommandReference could not publish '{typeName}' - the stored " +
+                    "type could not be resolved to an ICommand struct. Re-pick the type in the inspector.");
         }
     }
 }

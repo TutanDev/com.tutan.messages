@@ -33,6 +33,7 @@ namespace Tutan.Messages
             _subscriptions.Clear();
         }
 
+        /// <summary>Same as <see cref="Clear"/>; the bag stays usable afterwards.</summary>
         public void Dispose() => Clear();
     }
 

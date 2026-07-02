@@ -5,7 +5,7 @@
 # Messages
 
 **Namespace:** `Tutan.Messages`
-**Target:** Unity 6.0 (6000.1) and newer (CoreCLR friendly), XR applications
+**Target:** Unity 6.1 (6000.1) and newer (CoreCLR friendly), XR applications
 
 ## Why a Message Bus
 
@@ -38,7 +38,7 @@ This drives every design decision:
 - **Handlers receive `ref T`** — no struct copy on dispatch.
 - **Subscription uses integer tokens** — no delegate equality problems.
 - **No multicast delegates** — `Delegate.Combine` allocates.
-- **Profiler markers on all public entry points** — visible in Unity Profiler timeline.
+- **Profiler markers on the dispatch path** (`Publish`, `Enqueue`, `DrainQueues`) — visible in Unity Profiler timeline.
 
 ---
 

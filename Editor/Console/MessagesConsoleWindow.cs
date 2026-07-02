@@ -33,6 +33,7 @@ namespace Tutan.Messages.Editor
         const string KeyDrains = "Tutan.Messages.Debugger.Drains";
         const string KeyAutoScroll = "Tutan.Messages.Debugger.AutoScroll";
 
+        /// <summary>Open (or focus) the Messages Console window.</summary>
         [MenuItem("Window/Tutan/Messages Console")]
         public static void Open()
         {
@@ -169,9 +170,19 @@ namespace Tutan.Messages.Editor
 
         void FullRebuild()
         {
+            // Snapshot(out totalEver) pairs the records and the total under one
+            // lock — a separate TotalEver/Count read pair can tear against
+            // worker-thread appends and desync the incremental catch-up.
             _filtered.Clear();
-            _lastTotalProcessed = MessagesInstrumentation.TotalEver - MessagesInstrumentation.Count;
-            // Next Tick will catch up from the start of the buffer
+            var snapshot = MessagesInstrumentation.Snapshot(out long totalEver);
+            for (int i = 0; i < snapshot.Count; i++)
+            {
+                if (PassesFilter(snapshot[i]))
+                    _filtered.Add(snapshot[i]);
+            }
+            _lastTotalProcessed = totalEver;
+            _logList?.RefreshItems();
+            UpdateStatus();
         }
 
         void BindOpToggle(string name, bool initial, string prefKey, Action<bool> setter)
@@ -333,6 +344,9 @@ namespace Tutan.Messages.Editor
         {
             if (_logList == null || _paused) return; // UI may not be built yet (OnEnable runs before CreateGUI)
 
+            // Lock-free fast path: a stale read here only delays processing to the
+            // next tick. ProcessIncremental re-reads the total paired with its
+            // snapshot, so correctness never rests on this value.
             long total = MessagesInstrumentation.TotalEver;
             if (total == _lastTotalProcessed)
             {
@@ -340,7 +354,7 @@ namespace Tutan.Messages.Editor
                 return;
             }
 
-            ProcessIncremental(total);
+            ProcessIncremental();
 
             _logList.RefreshItems();
 
@@ -352,14 +366,19 @@ namespace Tutan.Messages.Editor
             Repaint();
         }
 
-        void ProcessIncremental(long totalEver)
+        void ProcessIncremental()
         {
-            var snapshot = MessagesInstrumentation.Snapshot();
+            // The paired overload: totalEver is read under the same lock as the
+            // records, so "the last N records are new" is exact. Reading TotalEver
+            // before snapshotting let worker-thread records land in between — those
+            // were displayed twice and pushed an equal number of older records out
+            // of the catch-up window entirely.
+            var snapshot = MessagesInstrumentation.Snapshot(out long totalEver);
             int currentCount = snapshot.Count;
-            
+
             int capacity = MessagesInstrumentation.Capacity;
             int newCount = (int)Math.Min(currentCount, totalEver - _lastTotalProcessed);
-            
+
             if (newCount <= 0) return;
 
             int startIdx = currentCount - newCount;

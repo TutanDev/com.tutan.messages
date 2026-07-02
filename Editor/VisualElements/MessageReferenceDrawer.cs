@@ -254,7 +254,11 @@ namespace Tutan.Messages.Editor
                 typeNameProp.stringValue = values[evt.newValue];
                 dataJsonProp.stringValue = string.Empty; // Reset data on type change
                 typeNameProp.serializedObject.ApplyModifiedProperties();
-                publishBtn.SetEnabled(!string.IsNullOrEmpty(typeNameProp.stringValue));
+                // Resolve, don't just null-check: re-selecting the trailing
+                // "(Missing)" entry stores a non-empty but unresolvable value,
+                // and the publish button must stay gated for it.
+                publishBtn.SetEnabled(!string.IsNullOrEmpty(typeNameProp.stringValue)
+                    && ScriptFileField.ResolveType(typeNameProp.stringValue) != null);
                 RefreshDataUI();
             });
 

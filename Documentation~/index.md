@@ -20,7 +20,7 @@ hot-path workloads where a single GC spike means a dropped frame.
 | 🧵 **Thread-safe queueing** | `Enqueue` from any thread; the main thread drains in `LateUpdate` |
 | 🪙 **Disposable subscriptions** | `Subscribe` returns a `Subscription` — dispose it, bag it, or `.AddTo(this)`; no `-=`, no delegate-equality footguns |
 | 🧭 **Events vs Commands** | `IEvent` for N:M notifications, `ICommand` for 1:1 intent — CQRS enforced at runtime |
-| 🎮 **XR-aware** | Zero-allocation dispatch on the hot path, profiler markers on every public entry point |
+| 🎮 **XR-aware** | Zero-allocation dispatch on the hot path, profiler markers on the dispatch path (`Publish`, `Enqueue`, `DrainQueues`) |
 | 🛠️ **Editor tooling** | Live Messages Console and serialized `EventReference` / `CommandReference` for inspector wiring |
 
 ---

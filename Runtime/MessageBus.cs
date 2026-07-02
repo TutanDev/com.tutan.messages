@@ -286,8 +286,15 @@ namespace Tutan.Messages
         readonly MessagesInstrumentation.BusKind _instrumentationKind;
 
         static readonly ProfilerMarker s_publishMarker = new("Messages.Publish");
+        static readonly ProfilerMarker s_enqueueMarker = new("Messages.Enqueue");
         static readonly ProfilerMarker s_drainMarker = new("Messages.DrainQueues");
 
+        /// <summary>
+        /// Create a standalone bus instance. The static <see cref="EventBus"/> /
+        /// <see cref="CommandBus"/> facades cover the common case; construct one
+        /// directly only when you need an isolated bus (e.g. per test fixture or
+        /// per subsystem).
+        /// </summary>
         public MessageBus() : this(MessagesInstrumentation.BusKind.Event) { }
 
         internal MessageBus(MessagesInstrumentation.BusKind kind)
@@ -394,6 +401,8 @@ namespace Tutan.Messages
         /// </summary>
         public void Enqueue<T>(in T message) where T : struct, TBase
         {
+            using var _ = s_enqueueMarker.Auto();
+
             var channel = GetOrCreateChannel<T>();
             MessagesInstrumentation.RecordEnqueue(_instrumentationKind, in message, channel);
             channel.Enqueue(message);
@@ -427,16 +436,25 @@ namespace Tutan.Messages
             MessagesInstrumentation.RecordDrain(_instrumentationKind, start: false);
         }
 
+        /// <summary>Number of active subscriptions for message type <typeparamref name="T"/>.</summary>
         public int GetSubscriberCount<T>() where T : struct, TBase
         {
             return _channels.TryGetValue(typeof(T), out var ch) ? ch.SubscriberCount : 0;
         }
 
+        /// <summary>
+        /// Non-generic counterpart of <see cref="GetSubscriberCount{T}"/> for callers
+        /// that only have a runtime <see cref="Type"/> (editor tooling, diagnostics).
+        /// </summary>
         public int GetSubscriberCount(Type type)
         {
             return _channels.TryGetValue(type, out var ch) ? ch.SubscriberCount : 0;
         }
 
+        /// <summary>
+        /// Number of message types with a channel on this bus — every type that has
+        /// been subscribed to or enqueued at least once since the last reset.
+        /// </summary>
         public int ChannelCount => _channels.Count;
 
         /// <summary>
@@ -461,6 +479,12 @@ namespace Tutan.Messages
             return (Channel<T>)_channels.GetOrAdd(typeof(T), channel);
         }
 
+        /// <summary>
+        /// Drop all subscriptions and queued messages and mark the instance disposed.
+        /// The static facades call this when swapping in a fresh bus on
+        /// <c>Reset</c>/<c>Install</c>; a disposed instance is not meant to be
+        /// reused — to clear a bus you keep, use <see cref="Reset"/> instead.
+        /// </summary>
         public void Dispose()
         {
             Dispose(true);

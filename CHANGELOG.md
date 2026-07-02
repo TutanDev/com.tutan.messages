@@ -2,6 +2,39 @@
 
 All notable changes to `com.tutan.messages` will be documented in this file.
 
+## [1.4.0] - 2026-07-02
+
+### Fixed
+- **Editor assets now load when the package is not embedded.**
+  `PathUtils.RelativePath` derived the Messages Console UXML/USS paths from the source file's compile-time location and only recognized `/Packages/` and `/Assets/` roots, so a package consumed from `Library/PackageCache` (registry or tarball install) or mounted via "Add package from disk" failed to load the console's UXML ("Could not load UXML at ...") and left `ScriptFileField` rows unstyled.
+  Resolution now falls back to mapping the physical path onto the package's virtual `Packages/<id>/` mount via `PackageInfo.FindForAssembly`.
+  `PathUtils` is now `internal` (it was never meant as public API).
+- **Messages Console no longer duplicates and skips records under worker-thread traffic.**
+  The incremental catch-up read `TotalEver` and then took a `Snapshot()` as two separate operations; records appended in between (worker-thread `Enqueue`) were displayed twice while an equal number of older records fell out of the catch-up window and were never shown.
+  A new `MessagesInstrumentation.Snapshot(out long totalEver)` overload returns the records and the paired total under one lock, and the console's tick and filter-toggle rebuild both consume it.
+  Filter toggles now also rebuild the visible log immediately instead of one editor tick later.
+- **Re-selecting the "(Missing)" dropdown entry no longer re-enables the synthetic Publish button.**
+  The `EventReference`/`CommandReference` drawer gated the button correctly on first draw but its type-changed callback only checked for a non-empty stored value, so picking a valid type and then re-selecting the trailing `(Missing)` entry enabled a button that publishes nothing.
+  The callback now resolves the stored type before enabling.
+- **`EventReference.Publish()` / `CommandReference.Publish()` no longer fail silently.**
+  When the stored type cannot be resolved (renamed, moved, or deleted since serialization), a warning naming the stored type is logged instead of a silent no-op.
+- **Deleted the stray `docs/` folder.**
+  It was a leftover from before the move to `Documentation~` and contained an outdated `Editor.md` (it still described the reflection-based publish path and the `Timestamp` auto-fill removed in 1.2.0).
+  Because the folder lacked the `~` suffix, Unity imported it and shipped the stale page into consuming projects; `Documentation~` is the one documentation source.
+
+### Added
+- **`Messages.Enqueue` profiler marker.**
+  `Enqueue` is now visible in the Unity Profiler timeline alongside the existing `Messages.Publish` and `Messages.DrainQueues` markers, including when called from worker threads.
+- **XML documentation for the remaining public API.**
+  `MessageBus<TBase>` (constructor, `GetSubscriberCount` overloads, `ChannelCount`, `Dispose`), `MessagesInstrumentation` (class, `BusKind`, `Op`, `Record` and `Subscriber` members, `Capacity`, `Count`, `TotalEver`, `SetCapacity`, `Snapshot`, `Clear`), `SubscriptionBag.Dispose`, and `MessagesConsoleWindow.Open` now carry doc comments.
+
+### Docs
+- **Corrected the minimum Unity version wording.**
+  `package.json` declares `"unity": "6000.1"`, which is Unity 6.1; the `README` and `Documentation~/Messages.md` labeled it "Unity 6.0 (6000.1)".
+  Both now say Unity 6.1 (6000.1) and newer.
+- **Corrected the profiler-marker claim.**
+  The `README`, `Documentation~/index.md`, and `Documentation~/Messages.md` claimed markers on "every (public) entry point"; markers exist on the dispatch path (`Publish`, `Enqueue`, `DrainQueues`), and with the new `Enqueue` marker the docs now say exactly that.
+
 ## [1.3.0] - 2026-06-26
 
 ### Changed

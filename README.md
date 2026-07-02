@@ -69,13 +69,14 @@ configure.
   dispose it, bundle several in a `SubscriptionBag`, or tie one to a
   GameObject's lifetime with `.AddTo(this)` and forget about `OnDestroy`.
   Explicit lifecycle: no leaked lambdas, no `-=` bugs with closures.
-- **Profiler markers** on every entry point. Visible in Unity Profiler timeline.
+- **Profiler markers** on the dispatch path (`Publish`, `Enqueue`,
+  `DrainQueues`). Visible in Unity Profiler timeline.
 - **Zero-config draining.** A persistent `[MessagesHost]` is auto-spawned at
   startup to drain both buses every `LateUpdate`. Define
   `TUTAN_MESSAGES_NO_AUTO_HOST` to opt out and own the drain loop yourself.
   Command handlers are bound explicitly at your composition root via
   `CommandBus.Install`.
-- **Unity 6.0 (6000.1) and newer.** Works on Windows, Mac, Linux, iOS,
+- **Unity 6.1 (6000.1) and newer.** Works on Windows, Mac, Linux, iOS,
   Android, WebGL, all XR platforms (Quest, PCVR, visionOS).
 
 ## Samples
