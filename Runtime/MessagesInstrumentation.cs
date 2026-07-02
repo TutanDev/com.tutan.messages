@@ -21,9 +21,11 @@ namespace Tutan.Messages
     /// Optional observation layer over both buses: while <see cref="Enabled"/> is
     /// true, every subscribe/unsubscribe/publish/enqueue (and optionally drain) is
     /// appended to a thread-safe ring buffer that the Messages Console — or your
-    /// own diagnostics via <see cref="Snapshot()"/> — can poll. Compiled into
-    /// editor and <c>TUTAN_MESSAGES_DEBUG</c> builds only; in release player
-    /// builds every hook call site is stripped and this type is never touched.
+    /// own diagnostics via <see cref="Snapshot()"/> — can poll. The bus-side hooks
+    /// are <c>[Conditional]</c> on <c>UNITY_EDITOR</c> / <c>TUTAN_MESSAGES_DEBUG</c>,
+    /// so in release player builds every hook call site is stripped; unless your
+    /// own code calls this API there, the type is never initialized and its ring
+    /// buffer is never allocated.
     /// </summary>
     public static class MessagesInstrumentation
     {
@@ -227,7 +229,7 @@ namespace Tutan.Messages
         internal static void RecordPublish<T>(BusKind bus, ref T message, ChannelBase channel) where T : struct, IMessage
         {
             if (!Enabled) return;
-            object payload =  message;
+            object payload = message;
             Append(new Record(
                 DateTime.UtcNow.Ticks, CurrentFrame, Thread.CurrentThread.ManagedThreadId,
                 bus, Op.Publish, typeof(T), 0, payload, null, null, CaptureSubscribers(channel)));

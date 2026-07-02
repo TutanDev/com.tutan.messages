@@ -40,7 +40,6 @@ EventBus.Publish(new PlayerScored { Points = 100, Timestamp = Time.time });
 > [`Documentation~/Messages.md`](Documentation~/Messages.md#messages) for details.
 
 ```csharp
-
 // 4. Unsubscribe by disposing (no delegate-equality footguns)…
 subscription.Dispose();
 

@@ -1,5 +1,5 @@
 // ============================================================================
-// Messages.cs — Zero-allocation Pub/Sub for Unity 6 / XR
+// MessageBus.cs — Zero-allocation Pub/Sub for Unity 6 / XR
 //
 // Supports:
 //   - Immediate (synchronous) dispatch within current frame
@@ -307,8 +307,9 @@ namespace Tutan.Messages
         /// <see cref="Subscription"/> bound to this bus instance — dispose it
         /// (directly, via a <see cref="SubscriptionBag"/>, or with <c>AddTo</c>) to
         /// unsubscribe. Because the handle captures the bus instance, disposing it
-        /// after a <see cref="Reset"/> is a harmless no-op rather than a risk to an
-        /// unrelated subscription on the replacement bus.
+        /// after the issuing bus was replaced (the static <c>EventBus.Reset</c>/
+        /// <c>CommandBus.Reset</c>/<c>CommandBus.Install</c> swap) is a harmless
+        /// no-op rather than a risk to an unrelated subscription on the replacement bus.
         /// Main thread only. Virtual so subclasses can add pre-subscribe guards.
         /// </summary>
         public virtual Subscription Subscribe<T>(MessageHandler<T> handler) where T : struct, TBase

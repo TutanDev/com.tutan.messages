@@ -7,6 +7,10 @@ namespace Tutan.Messages
     /// Decorate a <c>string</c> field to show a dropdown of all concrete
     /// <see cref="IEvent"/> types in the inspector. The field stores the selected
     /// type's <c>AssemblyQualifiedName</c>; resolve it with <c>Type.GetType(field)</c>.
+    /// Note that a bare <c>Type.GetType</c> returns null once the assembly's
+    /// version/identity has drifted since the name was serialized - for long-lived
+    /// data, fall back to scanning loaded assemblies, the same drift-tolerant
+    /// resolution <see cref="MessageReference.GetMessageType"/> uses.
     /// </summary>
     [AttributeUsage(AttributeTargets.Field)]
     public class EventTypeAttribute : PropertyAttribute
@@ -18,6 +22,10 @@ namespace Tutan.Messages
     /// Decorate a <c>string</c> field to show a dropdown of all concrete
     /// <see cref="ICommand"/> types in the inspector. The field stores the selected
     /// type's <c>AssemblyQualifiedName</c>; resolve it with <c>Type.GetType(field)</c>.
+    /// Note that a bare <c>Type.GetType</c> returns null once the assembly's
+    /// version/identity has drifted since the name was serialized - for long-lived
+    /// data, fall back to scanning loaded assemblies, the same drift-tolerant
+    /// resolution <see cref="MessageReference.GetMessageType"/> uses.
     /// </summary>
     [AttributeUsage(AttributeTargets.Field)]
     public class CommandTypeAttribute : PropertyAttribute
@@ -77,7 +85,9 @@ namespace Tutan.Messages
         /// <summary>
         /// Creates an instance of the message from serialized data. The returned
         /// message carries exactly the values authored in the inspector — no fields
-        /// are populated implicitly.
+        /// are populated implicitly. If the stored JSON cannot be parsed (e.g. it
+        /// was mangled by a merge or edited by hand), a warning is logged and the
+        /// type's default values are used - never an exception.
         /// Note: This boxes the struct.
         /// </summary>
         public object CreateMessage()
@@ -85,9 +95,20 @@ namespace Tutan.Messages
             var type = GetMessageType();
             if (type == null) return null;
 
-            return string.IsNullOrEmpty(dataJson)
-                ? Activator.CreateInstance(type)
-                : JsonUtility.FromJson(dataJson, type);
+            if (string.IsNullOrEmpty(dataJson))
+                return Activator.CreateInstance(type);
+
+            try
+            {
+                return JsonUtility.FromJson(dataJson, type);
+            }
+            catch (Exception)
+            {
+                Debug.LogWarning(
+                    $"Messages: stored payload for '{typeName}' is not valid JSON - " +
+                    "publishing the type's default values. Re-edit the payload in the inspector.");
+                return Activator.CreateInstance(type);
+            }
         }
     }
 

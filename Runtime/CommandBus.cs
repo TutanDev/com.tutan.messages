@@ -40,9 +40,9 @@ namespace Tutan.Messages
     /// Handlers are not subscribed ad-hoc. They are declared once at the composition
     /// root through <see cref="Install"/>; the N:1 rule is validated there and a
     /// violation is reported in the returned <see cref="InstallResult"/>, never as an
-    /// exception. After install, the only operations are
+    /// exception. After install, dispatch goes through
     /// <see cref="Publish{T}(ref T)"/>, <see cref="Enqueue{T}"/>, and
-    /// <see cref="DrainQueues"/>.
+    /// <see cref="DrainQueues"/>; there is no ad-hoc <c>Subscribe</c>.
     /// </para>
     /// </summary>
     public static class CommandBus

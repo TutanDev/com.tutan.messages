@@ -1,7 +1,7 @@
 // ============================================================================
-// MessagesDebuggerWindow.cs — Live view of EventBus / CommandBus traffic.
+// MessagesConsoleWindow.cs — Live view of EventBus / CommandBus traffic.
 //
-// Opens via "Window → Tutan → Message Console". While open it sets
+// Opens via "Window → Tutan → Messages Console". While open it sets
 // MessagesInstrumentation.Enabled = true; while closed it disables it again
 // so the bus pays no instrumentation cost when nobody is looking.
 // ============================================================================
@@ -175,12 +175,23 @@ namespace Tutan.Messages.Editor
             // worker-thread appends and desync the incremental catch-up.
             _filtered.Clear();
             var snapshot = MessagesInstrumentation.Snapshot(out long totalEver);
-            for (int i = 0; i < snapshot.Count; i++)
+            int count = snapshot.Count;
+
+            // While paused, the view must stay frozen at the pause point: drop
+            // the trailing records that arrived after it, and leave
+            // _lastTotalProcessed untouched so unpausing catches up normally.
+            // (Records the ring buffer has already overwritten are gone either
+            // way; the pause freezes the view, not the buffer.)
+            if (_paused)
+                count -= (int)Math.Min(count, totalEver - _lastTotalProcessed);
+            else
+                _lastTotalProcessed = totalEver;
+
+            for (int i = 0; i < count; i++)
             {
                 if (PassesFilter(snapshot[i]))
                     _filtered.Add(snapshot[i]);
             }
-            _lastTotalProcessed = totalEver;
             _logList?.RefreshItems();
             UpdateStatus();
         }

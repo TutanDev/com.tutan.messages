@@ -143,6 +143,8 @@ If you only need the *type* (not a payload), decorate a `string` field with
 ```
 
 Resolve it at runtime with `Type.GetType(eventType)`.
+Note that a bare `Type.GetType` returns `null` once the assembly's version/identity has drifted since the name was serialized (an assembly rename or version bump).
+For long-lived serialized data, fall back to scanning loaded assemblies on a `null` result - the same drift-tolerant resolution `MessageReference.GetMessageType()` uses internally.
 
 ### Supported field types in the inline editor
 

@@ -18,6 +18,15 @@ All notable changes to `com.tutan.messages` will be documented in this file.
   The callback now resolves the stored type before enabling.
 - **`EventReference.Publish()` / `CommandReference.Publish()` no longer fail silently.**
   When the stored type cannot be resolved (renamed, moved, or deleted since serialization), a warning naming the stored type is logged instead of a silent no-op.
+- **`MessageReference.CreateMessage()` no longer throws on corrupt stored JSON.**
+  `JsonUtility.FromJson` throws on malformed input, so a payload mangled by a merge or edited by hand made `EventReference.Publish()` / `CommandReference.Publish()` throw - against the package's failures-as-values convention (the inspector drawer already guarded this exact call).
+  A parse failure now logs a warning naming the stored type and publishes the type's default values.
+- **Messages Console: filter and search changes no longer break Pause.**
+  Toggling a filter (or editing the search) while paused rebuilt the visible log from the live ring buffer, pulling in records newer than the pause point and advancing the incremental-catch-up cursor past them.
+  The rebuild now drops records that arrived after the pause point and leaves the cursor untouched, so the view stays frozen and unpausing catches up normally.
+- **Editor asset paths no longer mis-resolve when the project lives under a folder named `Packages/` or `Assets/`.**
+  `PathUtils.RelativePath` scanned the physical path for a `/Packages/` / `/Assets/` marker before trying the exact package-mount mapping, so a project physically located under such a parent directory (e.g. `D:/Assets/MyProject/…`) false-matched and produced a broken asset path.
+  The `PackageInfo` mapping is now tried first; the marker scan remains only as the fallback for classic non-package installs.
 - **Deleted the stray `docs/` folder.**
   It was a leftover from before the move to `Documentation~` and contained an outdated `Editor.md` (it still described the reflection-based publish path and the `Timestamp` auto-fill removed in 1.2.0).
   Because the folder lacked the `~` suffix, Unity imported it and shipped the stale page into consuming projects; `Documentation~` is the one documentation source.
@@ -34,6 +43,12 @@ All notable changes to `com.tutan.messages` will be documented in this file.
   Both now say Unity 6.1 (6000.1) and newer.
 - **Corrected the profiler-marker claim.**
   The `README`, `Documentation~/index.md`, and `Documentation~/Messages.md` claimed markers on "every (public) entry point"; markers exist on the dispatch path (`Publish`, `Enqueue`, `DrainQueues`), and with the new `Enqueue` marker the docs now say exactly that.
+- **XML-doc corrections.**
+  `MessageBus<TBase>.Subscribe`'s dispose-after-reset note pointed its `cref` at the instance `Reset()` (in-place clear, no replacement bus) while describing the static facade swap; it now names the facades.
+  `CommandBus` claimed `Publish`/`Enqueue`/`DrainQueues` were "the only operations" after install (`Reset`, `GetSubscriberCount`, and `ChannelCount` also exist).
+  `MessagesInstrumentation` claimed the type is "compiled into editor and `TUTAN_MESSAGES_DEBUG` builds only" - the type is always compiled; it is the hook call sites that strip, and the never-initialized guarantee holds only while nothing calls its public surface.
+  `[EventType]`/`[CommandType]` (and `Documentation~/Editor.md`) advised resolving the stored name with a bare `Type.GetType`, which fails under the assembly-identity drift that 1.2.x fixed inside the package; both now describe the drift-tolerant fallback.
+  Stale file headers fixed: `MessageBus.cs` still called itself `Messages.cs`, and `MessagesConsoleWindow.cs` called itself `MessagesDebuggerWindow.cs` with the menu path misnamed "Message Console".
 
 ## [1.3.0] - 2026-06-26
 
