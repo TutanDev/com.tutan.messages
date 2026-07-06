@@ -2,7 +2,7 @@
 
 All notable changes to `com.tutan.messages` will be documented in this file.
 
-## [1.4.0] - 2026-07-02
+## [0.19.0] - 2026-07-02
 
 ### Fixed
 - **Editor assets now load when the package is not embedded.**
@@ -28,7 +28,7 @@ All notable changes to `com.tutan.messages` will be documented in this file.
   `PathUtils.RelativePath` scanned the physical path for a `/Packages/` / `/Assets/` marker before trying the exact package-mount mapping, so a project physically located under such a parent directory (e.g. `D:/Assets/MyProject/…`) false-matched and produced a broken asset path.
   The `PackageInfo` mapping is now tried first; the marker scan remains only as the fallback for classic non-package installs.
 - **Deleted the stray `docs/` folder.**
-  It was a leftover from before the move to `Documentation~` and contained an outdated `Editor.md` (it still described the reflection-based publish path and the `Timestamp` auto-fill removed in 1.2.0).
+  It was a leftover from before the move to `Documentation~` and contained an outdated `Editor.md` (it still described the reflection-based publish path and the `Timestamp` auto-fill removed in 0.17.0).
   Because the folder lacked the `~` suffix, Unity imported it and shipped the stale page into consuming projects; `Documentation~` is the one documentation source.
 
 ### Added
@@ -47,10 +47,10 @@ All notable changes to `com.tutan.messages` will be documented in this file.
   `MessageBus<TBase>.Subscribe`'s dispose-after-reset note pointed its `cref` at the instance `Reset()` (in-place clear, no replacement bus) while describing the static facade swap; it now names the facades.
   `CommandBus` claimed `Publish`/`Enqueue`/`DrainQueues` were "the only operations" after install (`Reset`, `GetSubscriberCount`, and `ChannelCount` also exist).
   `MessagesInstrumentation` claimed the type is "compiled into editor and `TUTAN_MESSAGES_DEBUG` builds only" - the type is always compiled; it is the hook call sites that strip, and the never-initialized guarantee holds only while nothing calls its public surface.
-  `[EventType]`/`[CommandType]` (and `Documentation~/Editor.md`) advised resolving the stored name with a bare `Type.GetType`, which fails under the assembly-identity drift that 1.2.x fixed inside the package; both now describe the drift-tolerant fallback.
+  `[EventType]`/`[CommandType]` (and `Documentation~/Editor.md`) advised resolving the stored name with a bare `Type.GetType`, which fails under the assembly-identity drift that 0.17.x fixed inside the package; both now describe the drift-tolerant fallback.
   Stale file headers fixed: `MessageBus.cs` still called itself `Messages.cs`, and `MessagesConsoleWindow.cs` called itself `MessagesDebuggerWindow.cs` with the menu path misnamed "Message Console".
 
-## [1.3.0] - 2026-06-26
+## [0.18.0] - 2026-06-26
 
 ### Changed
 - **Message types now only require `where T : struct` (was `unmanaged`).** This
@@ -77,7 +77,7 @@ All notable changes to `com.tutan.messages` will be documented in this file.
   thread that drains it. Prefer value-only messages on hot or cross-thread
   paths. See `Documentation~/Performance.md` and `Documentation~/Threading.md`.
 
-## [1.2.1] - 2026-06-13
+## [0.17.1] - 2026-06-13
 
 ### Fixed
 - **`EventReference`/`CommandReference` and `[EventType]`/`[CommandType]` no longer
@@ -107,7 +107,7 @@ All notable changes to `com.tutan.messages` will be documented in this file.
   `EventBus`, `ICommand` on `CommandBus`) instead of a blanket `IMessage`. No
   code change.
 
-## [1.2.0] - 2026-06-13
+## [0.17.0] - 2026-06-13
 
 ### Added
 - **The inline `EventReference`/`CommandReference` payload editor now supports
@@ -161,7 +161,7 @@ All notable changes to `com.tutan.messages` will be documented in this file.
   run a small margin past capacity and drops the whole overflow in one
   `RemoveRange`. Editor-only; no behavior change.
 
-## [1.1.0] - 2026-06-12
+## [0.16.0] - 2026-06-12
 
 ### Changed
 - **BREAKING — `CommandBus.TryInstall(out string error, configure)` is replaced
@@ -189,7 +189,7 @@ All notable changes to `com.tutan.messages` will be documented in this file.
   `result.Ok` and `error` with `result.Error`. The `configure` callback and
   `CommandRegistry.Handle<T>` are unchanged.
 
-## [1.0.2] - 2026-06-12
+## [0.15.2] - 2026-06-12
 
 ### Fixed
 - **`DrainQueues` no longer allocates every frame.** Draining enumerated the
@@ -219,7 +219,7 @@ All notable changes to `com.tutan.messages` will be documented in this file.
   total ahead of the buffer contents (which could skip or duplicate records in
   the log view).
 
-## [1.0.1] - 2026-06-12
+## [0.15.1] - 2026-06-12
 
 ### Docs
 - **Stopped prescribing `Reset()` for scene transitions.** Whether (and when) to
@@ -233,7 +233,7 @@ All notable changes to `com.tutan.messages` will be documented in this file.
 - Removed a stale reference to `decisions/CommandBus.md` from
   `docs/API-Reference.md` — the decisions folder is not shipped with the package.
 
-## [1.0.0] - 2026-06-12
+## [0.15.0] - 2026-06-12
 
 First stable release. Hardening pass over the runtime, editor tooling, and docs
 ahead of the Asset Store submission — no breaking API changes since 0.14.0.
