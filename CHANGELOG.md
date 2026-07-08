@@ -2,6 +2,13 @@
 
 All notable changes to `com.tutan.messages` will be documented in this file.
 
+## [Unreleased]
+
+### Docs
+- **Clarified that `MessagesInstrumentation.Enabled` is a no-op in a release player.**
+  `Documentation~/Editor.md`'s "Programmatic access" section showed `Enabled = true` + `Snapshot()` without stating that the underlying `Record*` hooks are `[Conditional]` on `UNITY_EDITOR` / `TUTAN_MESSAGES_DEBUG`, so a reader could conclude the API works in any player build and flip it on in a shipping build - where every hook call site is stripped, the ring buffer is never allocated, and `Snapshot()` stays empty.
+  The section now states that this is the intended way to observe bus traffic *outside* the editor (on-device overlay / log / telemetry), that it requires a build with `TUTAN_MESSAGES_DEBUG` defined, and that in a normal release build `Enabled = true` is a silent no-op.
+
 ## [0.19.0] - 2026-07-02
 
 ### Fixed

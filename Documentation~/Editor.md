@@ -65,8 +65,12 @@ defines present, an empty/closed window costs ~one `bool` check per
 
 ### Programmatic access
 
-`MessagesInstrumentation` is public and can be used to wire custom
-diagnostics or in-game overlays:
+`MessagesInstrumentation` is public runtime API — the Console window is just
+one consumer of it. You can read the ring buffer yourself to drive an in-game
+debug overlay, dump a trace to a log, or ship records to telemetry. That is
+the whole point of using it **outside the editor**: to observe bus traffic
+on a standalone / mobile / XR device build, where the editor Console can't
+reach.
 
 ```csharp
 MessagesInstrumentation.Enabled = true;
@@ -76,6 +80,17 @@ var records = MessagesInstrumentation.Snapshot();
 foreach (var r in records)
     Debug.Log($"{r.Bus} {r.Op} {r.MessageType?.Name}");
 ```
+
+> **`Enabled` only produces records where the hooks are compiled in.** It is a
+> plain toggle over the same `[Conditional]`-gated hooks described in **Runtime
+> cost**, above — so in a normal release player build, where neither
+> `UNITY_EDITOR` nor `TUTAN_MESSAGES_DEBUG` is defined, every `Record*` call
+> site is stripped and the ring buffer is never even allocated. There, setting
+> `Enabled = true` is a **silent no-op**: nothing is recorded and `Snapshot()`
+> stays empty. To use this API outside the editor you must build with
+> `TUTAN_MESSAGES_DEBUG` in the target platform's Scripting Define Symbols. It
+> is a development / QA capability — not something to flip on in a shipping
+> build.
 
 Payload capture is not a separate switch: while `Enabled` is `true`, every
 `Publish`/`Enqueue` record carries the boxed payload (one boxing allocation
