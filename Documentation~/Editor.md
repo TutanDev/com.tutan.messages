@@ -132,6 +132,11 @@ public class TriggerZone : MonoBehaviour
 }
 ```
 
+Arrays and lists (`EventReference[]`, `List<CommandReference>`) are supported;
+each element gets the same drawer. The drawers are UI Toolkit only — they render
+in the default Inspector (UI Toolkit since Unity 2022.2) but not inside a custom
+IMGUI editor that draws the field with `EditorGUILayout.PropertyField`.
+
 In the Inspector you get a type dropdown, a native UI-Toolkit field editor
 for the struct's public fields, and a small **▶** button that synthesizes
 and publishes the message immediately — handy for poking subscribers without
@@ -157,9 +162,22 @@ If you only need the *type* (not a payload), decorate a `string` field with
 [CommandType] public string commandType;  // dropdown of all ICommand types
 ```
 
-Resolve it at runtime with `Type.GetType(eventType)`.
-Note that a bare `Type.GetType` returns `null` once the assembly's version/identity has drifted since the name was serialized (an assembly rename or version bump).
-For long-lived serialized data, fall back to scanning loaded assemblies on a `null` result - the same drift-tolerant resolution `MessageReference.GetMessageType()` uses internally.
+Resolve it at runtime with `MessageTypeResolver.Resolve(eventType)`:
+
+```csharp
+Type type = MessageTypeResolver.Resolve(eventType); // null if deleted/renamed
+```
+
+Prefer it over a bare `Type.GetType(eventType)`, which returns `null` once the
+type's assembly has been renamed (e.g. the script moved into or out of an
+`.asmdef`) since the name was serialized. The resolver falls back to looking up
+the namespace-qualified name in every loaded assembly — the same resolution
+`MessageReference.GetMessageType()` and the inspector drawers use. Resolve once
+(at load time), not per frame: the fallback path scans loaded assemblies.
+
+Only structs appear in the dropdown — the bus is constrained to
+`where T : struct`, so a class implementing `IEvent` / `ICommand` could never
+be published.
 
 ### Supported field types in the inline editor
 

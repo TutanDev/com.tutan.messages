@@ -8,12 +8,17 @@ working together with nothing wired directly between the parts.
 Nothing to configure. `BasicPubSubSample` is the composition root: in `Awake` it
 builds `ScoreModel` and `MenuModel` and binds each command to its single handler
 through one `CommandBus.Install` call. Queue draining is handled for free by the
-auto-spawned `[MessagesHost]`. Just add the component and press Play.
+auto-spawned `[MessagesHost]`.
+
+**Requirements:** the sample UI uses uGUI (`com.unity.ugui`, installed by default
+in Unity 6 templates). It is render-pipeline agnostic (Built-in, URP, HDRP) and
+works with either input backend: at startup it adds the UI input module matching
+**Player ▸ Active Input Handling** (`InputSystemUIInputModule` for the Input System
+package, `StandaloneInputModule` for the legacy Input Manager).
 
 ## Run it
 
-1. Open the sample scene (or add an empty GameObject and the `BasicPubSubSample`
-   component, then assign its `MenuHud` and `ScoreHud` references).
+1. Open `BasicPubSubSample.unity` from the imported sample folder.
 2. Press Play. The menu appears.
 3. Click **Start** — the menu publishes a `StartGame` command. `MenuModel`
    handles it and raises `GameStarted`; the score HUD takes over and the score is

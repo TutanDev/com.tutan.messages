@@ -164,6 +164,72 @@ then funnel them all through one `Install`.
 void Reset()    // Clears all subscriptions and queues. Use on test teardown.
 ```
 
+On the static `EventBus` / `CommandBus`, `Reset()` disposes the current bus
+instance and swaps in a fresh one (outstanding `Subscription` handles become
+no-ops). `MessageBus<TBase>.Reset()` clears an instance in place.
+
+## MessageBus&lt;TBase&gt;
+
+```csharp
+public class MessageBus<TBase> : IDisposable where TBase : IMessage
+MessageBus()                         // standalone instance (tests, isolated subsystems)
+int GetSubscriberCount(Type type)    // non-generic counterpart for tooling
+void Dispose()                       // drops all state; do not reuse afterwards
+```
+
+The engine behind both facades, with the same `Subscribe` / `Publish` /
+`Enqueue` / `DrainQueues` / `GetSubscriberCount` / `ChannelCount` / `Reset`
+surface. A standalone instance is **not** drained by `MessagesHost` — call its
+`DrainQueues()` yourself. `MessageBus<ICommand>` used directly does not enforce
+the N:1 rule; only `CommandBus.Install` does.
+
+## MessagesHost / MessagesBootstrap
+
+```csharp
+[AddComponentMenu("Tutan/Messages Host")]
+public sealed class MessagesHost : MonoBehaviour   // drains both buses in LateUpdate
+```
+
+Auto-spawned (hidden, `DontDestroyOnLoad`) at `BeforeSceneLoad` unless
+`TUTAN_MESSAGES_NO_AUTO_HOST` is defined. A second active host destroys itself
+with a warning. See [Bootstrap](Bootstrap).
+
+## Serialized References
+
+```csharp
+[Serializable] public class EventReference   : MessageReference  // Publish() → EventBus
+[Serializable] public class CommandReference : MessageReference  // Publish() → CommandBus
+
+string TypeName { get; }        // stored AssemblyQualifiedName
+bool   IsValid  { get; }        // a type has been picked
+Type   GetMessageType()         // drift-tolerant; null if unresolvable
+object CreateMessage()          // boxed struct from the stored JSON payload
+void   Publish()                // boxes + JSON; authoring/debug use, not hot paths
+
+[EventType]   string field      // inspector dropdown of IEvent structs
+[CommandType] string field      // inspector dropdown of ICommand structs
+
+static Type MessageTypeResolver.Resolve(string typeName)  // resolve a stored type name
+```
+
+See [Editor Tooling](Editor#inspector-support-serialized-message-references).
+
+## MessagesInstrumentation
+
+```csharp
+static bool Enabled;                         // master toggle (Console sets it while open)
+static bool RecordDrains;                    // include DrainStart/DrainEnd records
+static List<Record> Snapshot();              // copy of the ring buffer, oldest first
+static List<Record> Snapshot(out long totalEver);
+static long TotalEver { get; }               // monotonic record count
+static int  Count { get; }  static int Capacity { get; }
+static void SetCapacity(int capacity);       // min 16; discards records
+static void Clear();
+```
+
+Records exist only where the hooks are compiled in: the editor, or a player
+built with `TUTAN_MESSAGES_DEBUG`. See [Editor Tooling](Editor#programmatic-access).
+
 ---
 
 See [Threading](Threading) for the full main-thread vs thread-safe contract,

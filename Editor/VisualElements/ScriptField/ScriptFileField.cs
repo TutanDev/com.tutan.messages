@@ -20,6 +20,11 @@ using UnityEngine.UIElements;
 
 namespace Tutan.Messages.Editor
 {
+    /// <summary>
+    /// UI Toolkit row showing the C# source file that declares a type: single click
+    /// pings it in the Project window, double click opens it in the script editor.
+    /// Used by the Messages Console; usable in your own editor tooling and UXML.
+    /// </summary>
     [UxmlElement]
     public partial class ScriptFileField : VisualElement
     {
@@ -194,22 +199,18 @@ namespace Tutan.Messages.Editor
             return firstMatch;
         }
 
-        /// <summary>Resolve a type's full or assembly-qualified name across loaded assemblies.</summary>
+        /// <summary>
+        /// Resolve a type's full or assembly-qualified name across loaded assemblies
+        /// (drift-tolerant, see <see cref="MessageTypeResolver.Resolve"/>). Cached per
+        /// input string for the lifetime of the domain — misses are cached too, which
+        /// is correct because adding a type triggers a domain reload that clears it.
+        /// </summary>
         public static Type ResolveType(string fullName)
         {
             if (string.IsNullOrEmpty(fullName)) return null;
             if (s_typeCache.TryGetValue(fullName, out var cached)) return cached;
 
-            Type found = Type.GetType(fullName, false);
-            if (found == null)
-            {
-                foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
-                {
-                    found = asm.GetType(fullName, false);
-                    if (found != null) break;
-                }
-            }
-
+            Type found = MessageTypeResolver.Resolve(fullName);
             s_typeCache[fullName] = found;
             return found;
         }

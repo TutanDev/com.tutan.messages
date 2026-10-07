@@ -6,30 +6,30 @@ namespace Tutan.Messages
     /// <summary>
     /// Decorate a <c>string</c> field to show a dropdown of all concrete
     /// <see cref="IEvent"/> types in the inspector. The field stores the selected
-    /// type's <c>AssemblyQualifiedName</c>; resolve it with <c>Type.GetType(field)</c>.
-    /// Note that a bare <c>Type.GetType</c> returns null once the assembly's
-    /// version/identity has drifted since the name was serialized - for long-lived
-    /// data, fall back to scanning loaded assemblies, the same drift-tolerant
-    /// resolution <see cref="MessageReference.GetMessageType"/> uses.
+    /// type's <c>AssemblyQualifiedName</c>; resolve it with
+    /// <see cref="MessageTypeResolver.Resolve"/>. Prefer that over a bare
+    /// <c>Type.GetType(field)</c>, which returns null once the type's assembly has
+    /// been renamed or its identity has drifted since the name was serialized.
     /// </summary>
     [AttributeUsage(AttributeTargets.Field)]
     public class EventTypeAttribute : PropertyAttribute
     {
+        /// <summary>The interface the dropdown filters by (<see cref="IEvent"/>).</summary>
         public Type BaseType => typeof(IEvent);
     }
 
     /// <summary>
     /// Decorate a <c>string</c> field to show a dropdown of all concrete
     /// <see cref="ICommand"/> types in the inspector. The field stores the selected
-    /// type's <c>AssemblyQualifiedName</c>; resolve it with <c>Type.GetType(field)</c>.
-    /// Note that a bare <c>Type.GetType</c> returns null once the assembly's
-    /// version/identity has drifted since the name was serialized - for long-lived
-    /// data, fall back to scanning loaded assemblies, the same drift-tolerant
-    /// resolution <see cref="MessageReference.GetMessageType"/> uses.
+    /// type's <c>AssemblyQualifiedName</c>; resolve it with
+    /// <see cref="MessageTypeResolver.Resolve"/>. Prefer that over a bare
+    /// <c>Type.GetType(field)</c>, which returns null once the type's assembly has
+    /// been renamed or its identity has drifted since the name was serialized.
     /// </summary>
     [AttributeUsage(AttributeTargets.Field)]
     public class CommandTypeAttribute : PropertyAttribute
     {
+        /// <summary>The interface the dropdown filters by (<see cref="ICommand"/>).</summary>
         public Type BaseType => typeof(ICommand);
     }
 
@@ -49,32 +49,18 @@ namespace Tutan.Messages
         [SerializeField] internal string typeName;
         [SerializeField] internal string dataJson;
 
+        /// <summary>The stored <c>AssemblyQualifiedName</c> of the message type; empty when none is picked.</summary>
         public string TypeName => typeName;
+
+        /// <summary>True when a type has been picked. Does not guarantee the type still resolves — see <see cref="GetMessageType"/>.</summary>
         public bool IsValid => !string.IsNullOrEmpty(typeName);
 
-        public Type GetMessageType() => IsValid ? ResolveType(typeName) : null;
-
         /// <summary>
-        /// Resolve a stored (assembly-qualified) type name resiliently. Tries the
-        /// direct <see cref="Type.GetType(string,bool)"/> first, then falls back to
-        /// scanning loaded assemblies so resolution still succeeds if the
-        /// assembly's version/identity has drifted since the name was serialized.
+        /// Resolve the stored type through <see cref="MessageTypeResolver.Resolve"/>,
+        /// which survives assembly renames. Null when nothing is picked or the type
+        /// was deleted/renamed since serialization.
         /// </summary>
-        static Type ResolveType(string name)
-        {
-            if (string.IsNullOrEmpty(name)) return null;
-
-            var found = Type.GetType(name, false);
-            if (found != null) return found;
-
-            foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
-            {
-                found = asm.GetType(name, false);
-                if (found != null) return found;
-            }
-
-            return null;
-        }
+        public Type GetMessageType() => IsValid ? MessageTypeResolver.Resolve(typeName) : null;
 
         /// <summary>
         /// Publish the serialized message to its bus. Implemented per message

@@ -23,15 +23,25 @@ namespace Tutan.Messages.Samples.BasicPubSub
 
         int _total = StartingScore;
 
+        // Set when a run ends, cleared by ResetScore. The decay worker is stopped
+        // when GameEnded is handled, but Destroy() is deferred to the end of the
+        // frame, so a tick it enqueued in that window still reaches us on the next
+        // drain. Ignoring commands between game over and reset keeps that stray
+        // tick from raising a second GameEnded and overwriting the final score.
+        bool _gameOver;
+
         /// <summary>Handles <see cref="AdjustScore"/>. Always invoked on the main thread
         /// (the bus drains queued commands in <c>LateUpdate</c>), so publishing an event
         /// from here is safe.</summary>
         public void Handle(ref AdjustScore cmd)
         {
+            if (_gameOver) return;
+
             int newTotal = _total + cmd.Delta;
 
             if (newTotal < 0)
             {
+                _gameOver = true;
                 // Game over. The final score is the fatal decay tick itself: the decay
                 // grows every second, so the longer the player survived, the bigger the
                 // delta that ended the run — survival time is the score.
@@ -45,8 +55,10 @@ namespace Tutan.Messages.Samples.BasicPubSub
             }
         }
 
+        /// <summary>Handles <see cref="ResetScore"/>: starts a new run from <c>StartingScore</c>.</summary>
         public void Handle(ref ResetScore command)
         {
+            _gameOver = false;
             _total = StartingScore;
             EventBus.Publish(new ScoreChanged { Total = _total, Delta = 0 });
         }

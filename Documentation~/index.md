@@ -19,7 +19,7 @@ hot-path workloads where a single GC spike means a dropped frame.
 | 🎯 **Zero-alloc dispatch** | Messages are `struct`s, delivered to handlers as `ref T` — no boxing, no copies |
 | 🧵 **Thread-safe queueing** | `Enqueue` from any thread; the main thread drains in `LateUpdate` |
 | 🪙 **Disposable subscriptions** | `Subscribe` returns a `Subscription` — dispose it, bag it, or `.AddTo(this)`; no `-=`, no delegate-equality footguns |
-| 🧭 **Events vs Commands** | `IEvent` for N:M notifications, `ICommand` for 1:1 intent — CQRS enforced at runtime |
+| 🧭 **Events vs Commands** | `IEvent` for N:M notifications, `ICommand` for N:1 intent — one handler per command, validated once at install |
 | 🎮 **XR-aware** | Zero-allocation dispatch on the hot path, profiler markers on the dispatch path (`Publish`, `Enqueue`, `DrainQueues`) |
 | 🛠️ **Editor tooling** | Live Messages Console and serialized `EventReference` / `CommandReference` for inspector wiring |
 
@@ -31,10 +31,18 @@ hot-path workloads where a single GC spike means a dropped frame.
 |---|---|---|
 | 📖 | [Why this library](Messages) | The problem, the approach, message and handler basics |
 | 📋 | [API Reference](API-Reference) | Every public member — signature and one-line description |
-| 🧪 | [Examples](Examples) | Basic pub/sub, queued worker dispatch, commands, scene cleanup — plus the runnable **Basic Publish / Subscribe** sample (Package Manager ▸ Samples) |
+| 🧪 | [Examples](Examples) | Basic pub/sub, subscription lifetimes, queued worker dispatch, commands — plus the runnable **Basic Publish / Subscribe** sample (Package Manager ▸ Samples) |
 | 🧵 | [Threading](Threading) | Which calls are main-thread-only, which are thread-safe, and why |
 | ⚡ | [Performance](Performance) | Cost table, allocation contract, pre-warming recipe |
-| ⚠️ | [Edge Cases](EdgeCases) | Reentrant publish, subscribe/unsubscribe during dispatch, exceptions |
+| ⚠️ | [Edge Cases](EdgeCases) | Reentrant publish, subscribe/unsubscribe during dispatch, exceptions, lifetime and reset caveats |
 | 🏛️ | [Architecture](Architecture) | When to reach for the bus and when not to |
 | 🚀 | [Bootstrap](Bootstrap) | Automatic queue draining and explicit command-handler binding |
 | 🛠️ | [Editor Tooling](Editor) | Messages Console window and inspector-serializable references |
+
+---
+
+## ✅ Requirements
+
+- Unity 6.1 (`6000.1`) or newer. Pure C# runtime — no native plugins, no package dependencies.
+- Any render pipeline (Built-in, URP, HDRP) and any platform Unity targets.
+- The **Basic Publish / Subscribe** sample additionally uses uGUI (`com.unity.ugui`).

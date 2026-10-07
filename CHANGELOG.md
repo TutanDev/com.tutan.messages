@@ -2,12 +2,66 @@
 
 All notable changes to `com.tutan.messages` will be documented in this file.
 
-## [Unreleased]
+## [1.0.0] - 2026-10-07
+
+First public Asset Store release. The public API is unchanged from 0.19.0 apart from
+the additive `MessageTypeResolver`; entries below 1.0.0 are the pre-release history.
+
+### Added
+- **`MessageTypeResolver.Resolve(string)`** — public, drift-tolerant resolution of a
+  stored message type name (the `AssemblyQualifiedName` written by `[EventType]` /
+  `[CommandType]` fields and `EventReference` / `CommandReference`). Use it instead of
+  hand-rolling a `Type.GetType` fallback.
+
+### Fixed
+- **Assembly-drift fallback for stored message types never matched.**
+  `MessageReference.GetMessageType()` and the editor's `ScriptFileField.ResolveType`
+  retried a failed `Type.GetType` by passing the *assembly-qualified* name to
+  `Assembly.GetType`, which rejects assembly-qualified input and returns null. A
+  message struct moved into another assembly (e.g. into or out of an `.asmdef`) after
+  being serialized therefore showed as `(Missing)` in the inspector and
+  `EventReference.Publish()` / `CommandReference.Publish()` logged a warning instead of
+  publishing. Both now go through `MessageTypeResolver`, which strips the assembly
+  part (generic-argument aware) before scanning loaded assemblies.
+- **`EventReference` / `CommandReference` arrays and lists lost their category in the
+  inspector.** The drawer classified the field by `fieldInfo.FieldType`, which for
+  `EventReference[]` / `List<CommandReference>` is the collection type: the dropdown
+  listed events *and* commands, and the ▶ publish button silently did nothing. The
+  drawer now classifies by the element type.
+- **`[EventType]` / `[CommandType]` dropdowns listed classes.** Classes implementing
+  `IEvent` / `ICommand` can never be published (the bus is `where T : struct`); the
+  dropdowns now list structs only, matching the reference drawer.
+- **`SubscriptionAnchor` is now actually hidden.** It was documented as hidden but
+  only hidden from the Add Component menu; it showed in the Inspector, and an
+  edit-mode `AddTo(gameObject)` (e.g. from an `[ExecuteAlways]` script) saved an empty
+  anchor into the scene. It now carries `HideInInspector | DontSaveInEditor`.
+- **Messages Console: payloads with an indexer property** printed `<error>` for it;
+  indexers are now skipped.
+- **Sample: a decay tick racing game over could overwrite the final score.** The
+  worker is destroyed at end of frame, so a tick enqueued in that window raised a
+  second `GameEnded` on the next drain. `ScoreModel` now ignores `AdjustScore` between
+  game over and `ResetScore`.
+- **Sample scene no longer depends on URP or the Input System package.** It carried a
+  URP Global Volume (referencing a `VolumeProfile` that was not shipped), URP
+  camera/light data, and an `InputSystemUIInputModule` — missing scripts in Built-in /
+  HDRP projects and unresponsive buttons with the legacy Input Manager. Those
+  components are removed; `BasicPubSubSample` adds the UI input module matching
+  **Active Input Handling** at startup. The sample still requires uGUI.
 
 ### Docs
-- **Clarified that `MessagesInstrumentation.Enabled` is a no-op in a release player.**
-  `Documentation~/Editor.md`'s "Programmatic access" section showed `Enabled = true` + `Snapshot()` without stating that the underlying `Record*` hooks are `[Conditional]` on `UNITY_EDITOR` / `TUTAN_MESSAGES_DEBUG`, so a reader could conclude the API works in any player build and flip it on in a shipping build - where every hook call site is stripped, the ring buffer is never allocated, and `Snapshot()` stays empty.
-  The section now states that this is the intended way to observe bus traffic *outside* the editor (on-device overlay / log / telemetry), that it requires a build with `TUTAN_MESSAGES_DEBUG` defined, and that in a normal release build `Enabled = true` is a silent no-op.
+- `MessagesInstrumentation.Enabled` is a no-op in a release player (hooks are
+  `[Conditional]` on `UNITY_EDITOR` / `TUTAN_MESSAGES_DEBUG`); `Documentation~/Editor.md`
+  now says so and that `TUTAN_MESSAGES_DEBUG` is required for on-device capture.
+- Corrected stale claims: commands are N:1 validated at install time (not "1:1 enforced
+  at runtime"); subscriptions are disposable handles (not "integer tokens"); channel
+  storage is a `ConcurrentDictionary` and queues are `ConcurrentQueue`; the removed
+  "scene cleanup" example is no longer advertised.
+- API Reference now covers `MessageBus<TBase>`, `MessagesHost`, `MessageTypeResolver`,
+  `EventReference` / `CommandReference`, and `MessagesInstrumentation`.
+- Edge Cases: documented the never-activated-GameObject `AddTo` caveat, the
+  `SubsystemRegistration` reset ordering, and queue pre-warming.
+- XML docs added to the remaining undocumented public members (`MessageReference`,
+  attribute `BaseType`, editor drawers, `ScriptFileField`, `MessagesConsoleWindow`).
 
 ## [0.19.0] - 2026-07-02
 
@@ -242,7 +296,7 @@ All notable changes to `com.tutan.messages` will be documented in this file.
 
 ## [0.15.0] - 2026-06-12
 
-First stable release. Hardening pass over the runtime, editor tooling, and docs
+API-stable pre-release. Hardening pass over the runtime, editor tooling, and docs
 ahead of the Asset Store submission — no breaking API changes since 0.14.0.
 
 ### Fixed

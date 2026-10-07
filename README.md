@@ -56,12 +56,13 @@ configure.
 ## Features
 
 - **Zero GC in the dispatch hot path.** `ref`-passed handlers, no
-  multicast delegates, no struct copies.
+  multicast delegates, no per-handler struct copies.
 - **EventBus (N:M)** for notifications, **CommandBus (N:1)** for intents
   (CQRS-friendly).
 - **Editor tooling** — a live **Messages Console** for inspecting bus traffic
   (subscribe/publish/enqueue/drain records, payloads, and the subscribers
-  frozen at fire time).
+  frozen at fire time), plus `EventReference` / `CommandReference` fields for
+  picking and publishing messages from the Inspector.
 - **Thread-safe `Enqueue`** for network/decode/async callbacks; deferred
   dispatch on the main thread via `DrainQueues()`.
 - **Disposable subscriptions** — `Subscribe` returns a `Subscription`;
@@ -75,8 +76,10 @@ configure.
   `TUTAN_MESSAGES_NO_AUTO_HOST` to opt out and own the drain loop yourself.
   Command handlers are bound explicitly at your composition root via
   `CommandBus.Install`.
-- **Unity 6.1 (6000.1) and newer.** Works on Windows, Mac, Linux, iOS,
-  Android, WebGL, all XR platforms (Quest, PCVR, visionOS).
+- **Unity 6.1 (6000.1) and newer.** Pure C#, no package dependencies, any
+  render pipeline. Works on Windows, Mac, Linux, iOS, Android, WebGL, and XR
+  platforms (Quest, PCVR, visionOS). On WebGL there are no worker threads, so
+  `Enqueue` is simply a deferred same-thread dispatch.
 
 ## Samples
 
@@ -87,7 +90,8 @@ One sample included, importable from the Package Manager:
   the score UI listens for events. Covers the CommandBus (N:1), the EventBus (N:M),
   composition-root handler binding via `CommandBus.Install`, and thread-safe
   `Enqueue`/drain in one place. Import the sample, open its scene, and press
-  Play — no configuration needed.
+  Play — no configuration needed. Requires uGUI (`com.unity.ugui`, present by
+  default); works with any render pipeline and either input backend.
 
 ## Full documentation
 

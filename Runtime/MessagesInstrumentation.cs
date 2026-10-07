@@ -98,7 +98,7 @@ namespace Tutan.Messages
             /// <summary>The boxed message for Publish/Enqueue records; null otherwise.</summary>
             public readonly object PayloadBox;
 
-            /// <summary>Handler target type name for Subscribe records; null otherwise.</summary>
+            /// <summary>Handler target's short type name (no namespace) for Subscribe records, or null for static handlers and other ops.</summary>
             public readonly string HandlerTarget;
 
             /// <summary>Handler method name for Subscribe records; null otherwise.</summary>
@@ -131,7 +131,11 @@ namespace Tutan.Messages
             }
         }
 
-        /// <summary>Master toggle. When false, every Record* call returns immediately.</summary>
+        /// <summary>
+        /// Master toggle. When false, every Record* call returns immediately. The
+        /// Messages Console sets it true while open and false when closed — code that
+        /// drives its own diagnostics alongside the window should re-assert it.
+        /// </summary>
         public static bool Enabled;
 
         /// <summary>When true, <see cref="Op.DrainStart"/> / <see cref="Op.DrainEnd"/> are appended to the buffer. Off by default — drains fire every frame and would flood the ring buffer.</summary>

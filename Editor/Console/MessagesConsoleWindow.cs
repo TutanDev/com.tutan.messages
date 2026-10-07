@@ -18,6 +18,12 @@ using UnityEngine.UIElements;
 
 namespace Tutan.Messages.Editor
 {
+    /// <summary>
+    /// Editor window (<b>Window ▸ Tutan ▸ Messages Console</b>) that shows a live,
+    /// filterable log of <see cref="EventBus"/> / <see cref="CommandBus"/> traffic
+    /// recorded by <see cref="MessagesInstrumentation"/>. Instrumentation is enabled
+    /// only while the window is open.
+    /// </summary>
     public sealed class MessagesConsoleWindow : EditorWindow
     {
         static readonly string UxmlPath = PathUtils.RelativePath(".uxml");
@@ -461,7 +467,7 @@ namespace Tutan.Messages.Editor
         {
             var t = payload.GetType();
             const BindingFlags flags = BindingFlags.Public | BindingFlags.Instance;
-            
+
             var fields = t.GetFields(flags);
             var props = t.GetProperties(flags);
 
@@ -480,7 +486,8 @@ namespace Tutan.Messages.Editor
 
             foreach (var p in props)
             {
-                if (!p.CanRead) continue;
+                // Indexers need arguments - GetValue(payload) would always throw.
+                if (!p.CanRead || p.GetIndexParameters().Length > 0) continue;
                 object value;
                 try { value = p.GetValue(payload); } catch { value = "<error>"; }
                 sb.Append("  ").Append(p.Name).Append(" = ").Append(value ?? "null").Append('\n');

@@ -5,7 +5,7 @@
 //   - Immediate (synchronous) dispatch within current frame
 //   - Queued dispatch for cross-frame / cross-thread decoupling
 //   - Struct messages passed by ref (zero GC in hot path)
-//   - Deterministic subscription lifecycle via tokens
+//   - Deterministic subscription lifecycle via disposable Subscription handles
 // ============================================================================
 
 using System;
@@ -18,7 +18,9 @@ using UnityEngine;
 namespace Tutan.Messages
 {
     /// <summary>
-    /// Handler delegate. Ref parameter avoids struct copy on dispatch.
+    /// Handler delegate. The <c>ref</c> parameter avoids a struct copy per handler
+    /// on dispatch. Handlers may mutate the message; later handlers in the same
+    /// dispatch observe the mutation.
     /// </summary>
     public delegate void MessageHandler<T>(ref T message) where T : struct, IMessage;
 
@@ -399,6 +401,8 @@ namespace Tutan.Messages
         /// <summary>
         /// Enqueue a message for deferred dispatch on the next DrainQueues() call.
         /// Thread-safe. Use from worker threads, async callbacks, network handlers.
+        /// The struct is copied (shallowly) into a per-type <c>ConcurrentQueue</c>;
+        /// the first Enqueue of a type allocates its channel and queue.
         /// </summary>
         public void Enqueue<T>(in T message) where T : struct, TBase
         {

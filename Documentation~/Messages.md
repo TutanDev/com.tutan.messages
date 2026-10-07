@@ -36,7 +36,7 @@ This drives every design decision:
 - **Messages are `struct`** — generic specialization plus `ref`-passing keeps
   dispatch allocation-free; the message is never boxed or heap-stored.
 - **Handlers receive `ref T`** — no struct copy on dispatch.
-- **Subscription uses integer tokens** — no delegate equality problems.
+- **Subscriptions are disposable handles** — no delegate-equality problems, no `-=`.
 - **No multicast delegates** — `Delegate.Combine` allocates.
 - **Profiler markers on the dispatch path** (`Publish`, `Enqueue`, `DrainQueues`) — visible in Unity Profiler timeline.
 
@@ -61,6 +61,7 @@ public struct HandTrackingLost : IEvent
 }
 
 // Also fine — fixed buffers stay value-typed
+// (fixed-size buffers need "Allow 'unsafe' Code" on the declaring assembly)
 public struct NetworkPacketReceived : IEvent
 {
     public int PacketId;

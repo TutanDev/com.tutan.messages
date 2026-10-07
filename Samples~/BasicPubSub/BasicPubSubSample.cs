@@ -1,13 +1,15 @@
 using UnityEngine;
+using UnityEngine.EventSystems;
 
 namespace Tutan.Messages.Samples.BasicPubSub
 {
     // ── Composition root ─────────────────────────────────────────────────
 
     /// <summary>
-    /// The one component you add to the scene. Drop it on an empty GameObject and
-    /// press Play — it switches between the menu and score HUDs and owns the
-    /// game-lifecycle events.
+    /// The sample's composition root, already placed in <c>BasicPubSubSample.unity</c>
+    /// with its <see cref="MenuHud"/> / <see cref="ScoreHud"/> references wired —
+    /// open the scene and press Play. It switches between the menu and score HUDs
+    /// and owns the game-lifecycle events.
     /// <para>
     /// This is the composition root: in <see cref="Awake"/> it builds the command
     /// handlers (<see cref="ScoreModel"/>, <see cref="MenuModel"/>) and binds each
@@ -30,11 +32,13 @@ namespace Tutan.Messages.Samples.BasicPubSub
         ScoreModel _scoreModel;
         MenuModel _menuModel;
 
+        // Background decay driver for the current run; null between runs.
         ScoreDecayWorker _enemy;
-
 
         void Awake()
         {
+            EnsureUIInputModule();
+
             _menuHud.gameObject.SetActive(true);
             _scoreHud.gameObject.SetActive(false);
 
@@ -68,14 +72,39 @@ namespace Tutan.Messages.Samples.BasicPubSub
 
         private void OnGameEnded(ref GameEnded message)
         {
-            Destroy(_enemy);
+            if (_enemy != null)
+            {
+                Destroy(_enemy);
+                _enemy = null;
+            }
 
             _menuHud.gameObject.SetActive(true);
             _scoreHud.gameObject.SetActive(false);
 
-            // The menu was inactive (and unsubscribed) when GameEnded fired, so push the
-            // final score directly rather than relying on the event it missed.
+            // MenuHud is a passive view that does not subscribe to GameEnded (it was
+            // inactive when the event fired anyway), so push the final score to it.
             _menuHud.SetFinalScore(message.FinalScore);
+        }
+
+        // The scene ships an EventSystem without an input module so it works with
+        // either input backend: the Input System package (Unity 6 default) or the
+        // legacy Input Manager. Pick the module that matches the project's Active
+        // Input Handling setting — the wrong one throws or ignores clicks.
+        void EnsureUIInputModule()
+        {
+            var eventSystem = EventSystem.current != null
+                ? EventSystem.current
+                : FindAnyObjectByType<EventSystem>();
+            if (eventSystem == null)
+                eventSystem = new GameObject("EventSystem").AddComponent<EventSystem>();
+            if (eventSystem.GetComponent<BaseInputModule>() != null) return;
+
+#if ENABLE_INPUT_SYSTEM
+            // With no actions asset assigned, the module binds its default UI actions.
+            eventSystem.gameObject.AddComponent<UnityEngine.InputSystem.UI.InputSystemUIInputModule>();
+#else
+            eventSystem.gameObject.AddComponent<StandaloneInputModule>();
+#endif
         }
     }
 }

@@ -52,4 +52,34 @@ into a broken frame.
 ## Zero Subscribers
 
 `Publish<T>` returns immediately if no channel exists for `T`. Cost: one
-`Dictionary.TryGetValue` call.
+lock-free `ConcurrentDictionary.TryGetValue` call.
+
+## `AddTo(gameObject)` on a Never-Activated GameObject
+
+`AddTo(this)` / `AddTo(gameObject)` dispose the subscription from the hidden
+`SubscriptionAnchor`'s `OnDestroy`. Unity only calls `OnDestroy` on components
+whose GameObject has been active at least once, so a subscription anchored to a
+GameObject that is created inactive and destroyed without ever being activated
+(a pooled instance, a disabled prefab instance) is **not** disposed — its
+handler keeps running against a destroyed object. Hold the `Subscription` (or
+use a `SubscriptionBag`) for those lifetimes.
+
+## Bus Reset on Enter Play Mode
+
+`EventBus` and `CommandBus` reset themselves at
+`RuntimeInitializeLoadType.SubsystemRegistration` so that state never leaks
+between play sessions when Domain Reload is disabled. Consequences:
+
+- Subscriptions made in edit mode (e.g. from `[InitializeOnLoad]` editor code)
+  and handlers installed before entering Play mode are dropped.
+- Unity does not order `SubsystemRegistration` callbacks across types, so a
+  `Subscribe`/`Install` from *your own* `SubsystemRegistration` callback may run
+  before or after the reset. Subscribe and install at `BeforeSceneLoad` or later
+  (`Awake` of a bootstrap object is the usual place).
+
+## Subscriptions After `Reset()`
+
+The static `EventBus.Reset()` / `CommandBus.Reset()` / `CommandBus.Install`
+replace the bus instance. A `Subscription` taken before the swap targets the
+discarded bus, so disposing it is a harmless no-op — it can never remove a
+subscription that was made on the replacement bus.

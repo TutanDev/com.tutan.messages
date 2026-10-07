@@ -8,6 +8,12 @@ using UnityEngine.UIElements;
 
 namespace Tutan.Messages.Editor
 {
+    /// <summary>
+    /// Inspector dropdown for <c>string</c> fields decorated with
+    /// <see cref="EventTypeAttribute"/> / <see cref="CommandTypeAttribute"/>. Lists
+    /// every concrete message struct of the matching category and stores the pick's
+    /// <c>AssemblyQualifiedName</c>. UI Toolkit only (no IMGUI fallback).
+    /// </summary>
     [CustomPropertyDrawer(typeof(EventTypeAttribute))]
     [CustomPropertyDrawer(typeof(CommandTypeAttribute))]
     public class MessageTypeDrawer : PropertyDrawer
@@ -28,8 +34,10 @@ namespace Tutan.Messages.Editor
                 return container;
             }
 
+            // Structs only: the bus API is constrained to `where T : struct`, so a
+            // class implementing IEvent/ICommand could never be published.
             var types = TypeCache.GetTypesDerivedFrom(baseType)
-                .Where(t => !t.IsAbstract && !t.IsInterface)
+                .Where(t => !t.IsAbstract && !t.IsInterface && t.IsValueType)
                 .OrderBy(t => t.Name)
                 .ToList();
 
@@ -128,6 +136,13 @@ namespace Tutan.Messages.Editor
         }
     }
 
+    /// <summary>
+    /// Inspector for <see cref="EventReference"/> / <see cref="CommandReference"/>
+    /// (and subclasses): a type dropdown, an inline editor for the struct's public
+    /// fields (serialized to JSON), and a ▶ button that publishes the message
+    /// immediately. Works for plain fields as well as arrays and lists of
+    /// references. UI Toolkit only (no IMGUI fallback).
+    /// </summary>
     [CustomPropertyDrawer(typeof(MessageReference), true)]
     public class MessageReferenceDrawer : PropertyDrawer
     {
@@ -143,10 +158,14 @@ namespace Tutan.Messages.Editor
             var typeNameProp = property.FindPropertyRelative("typeName");
             var dataJsonProp = property.FindPropertyRelative("dataJson");
 
+            // For array/List<T> fields Unity invokes the drawer per element, but
+            // fieldInfo still describes the collection field — classify by the
+            // element type, or the category (and the publish button) is lost.
+            var referenceType = ElementType(fieldInfo.FieldType);
             Type baseType = typeof(IMessage);
-            if (fieldInfo.FieldType == typeof(EventReference) || fieldInfo.FieldType.IsSubclassOf(typeof(EventReference)))
+            if (typeof(EventReference).IsAssignableFrom(referenceType))
                 baseType = typeof(IEvent);
-            else if (fieldInfo.FieldType == typeof(CommandReference) || fieldInfo.FieldType.IsSubclassOf(typeof(CommandReference)))
+            else if (typeof(CommandReference).IsAssignableFrom(referenceType))
                 baseType = typeof(ICommand);
 
             var types = TypeCache.GetTypesDerivedFrom(baseType)
@@ -229,8 +248,8 @@ namespace Tutan.Messages.Editor
                 object instance;
                 try
                 {
-                    instance = string.IsNullOrEmpty(dataJsonProp.stringValue) 
-                        ? Activator.CreateInstance(type) 
+                    instance = string.IsNullOrEmpty(dataJsonProp.stringValue)
+                        ? Activator.CreateInstance(type)
                         : JsonUtility.FromJson(dataJsonProp.stringValue, type);
                 }
                 catch
@@ -265,6 +284,15 @@ namespace Tutan.Messages.Editor
             RefreshDataUI();
 
             return root;
+        }
+
+        // T[] → T, List<T> → T; anything else is returned unchanged.
+        static Type ElementType(Type fieldType)
+        {
+            if (fieldType.IsArray) return fieldType.GetElementType();
+            if (fieldType.IsGenericType && fieldType.GetGenericTypeDefinition() == typeof(List<>))
+                return fieldType.GetGenericArguments()[0];
+            return fieldType;
         }
 
         // Builds a native UI-Toolkit field bound to one public field of the boxed
