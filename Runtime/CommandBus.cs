@@ -35,7 +35,14 @@ namespace Tutan.Messages
 
     /// <summary>
     /// Static bus for <see cref="ICommand"/> messages.
-    /// N:1 topology: any number of publishers, exactly one handler per command type.
+    /// N:1 topology: any number of publishers, at most one handler per command type
+    /// (a second binding is rejected at install).
+    /// <para>
+    /// Nothing requires every command type to be bound: publishing or enqueuing a
+    /// command that has no handler is a silent no-op. For commands that must be
+    /// handled, assert <c>GetSubscriberCount&lt;T&gt;() == 1</c> once after
+    /// <see cref="Install"/>.
+    /// </para>
     /// <para>
     /// Handlers are not subscribed ad-hoc. They are declared once at the composition
     /// root through <see cref="Install"/>; the N:1 rule is validated there and a
@@ -68,6 +75,19 @@ namespace Tutan.Messages
         /// Calling again rebuilds the bus from scratch (composition-root semantics) —
         /// previously installed handlers are replaced wholesale.
         /// </para>
+        /// <para>
+        /// A successful install, like <see cref="Reset"/>, discards the commands still
+        /// queued on the live bus — including on the first install, so a command
+        /// enqueued before it is lost (the editor and development builds log a
+        /// warning). Install before anything enqueues: from a <c>BeforeSceneLoad</c>
+        /// <c>[RuntimeInitializeOnLoadMethod]</c>, or from a bootstrap object with an
+        /// early Script Execution Order.
+        /// </para>
+        /// <para>
+        /// Do not install from inside a command handler: the drain in progress still
+        /// delivers the rest of that command type's backlog to the replaced handler,
+        /// and only the other types' queues are discarded.
+        /// </para>
         /// </summary>
         public static InstallResult Install(Action<CommandRegistry> configure)
         {
@@ -84,13 +104,29 @@ namespace Tutan.Messages
             // mutates the live bus.
             var fresh = new MessageBus<ICommand>(MessagesInstrumentation.BusKind.Command);
             registry.ApplyTo(fresh);
+            WarnIfDiscardingQueued(s_bus);
             s_bus.Dispose();
             s_bus = fresh;
 
             return InstallResult.Success(registry.HandlerCount);
         }
 
-        /// <summary>Dispatch a command immediately to its single handler. Main thread only. Zero allocation.</summary>
+        // Install order relative to an early Enqueue (e.g. another object's Awake)
+        // is easy to get wrong and the loss is otherwise silent. Reset does not
+        // warn: discarding the queue is its whole purpose (test teardown, Enter
+        // Play Mode). Stripped from release players, like MainThreadGuard.
+        [System.Diagnostics.Conditional("UNITY_EDITOR"), System.Diagnostics.Conditional("DEVELOPMENT_BUILD")]
+        static void WarnIfDiscardingQueued(MessageBus<ICommand> bus)
+        {
+            string pending = bus.DescribePendingQueues();
+            if (pending == null) return;
+
+            Debug.LogWarning(
+                $"Messages: CommandBus.Install discarded queued commands that had not been drained yet ({pending}). " +
+                "Install before anything enqueues, e.g. from a BeforeSceneLoad [RuntimeInitializeOnLoadMethod].");
+        }
+
+        /// <summary>Dispatch a command immediately to its handler (a silent no-op if none is bound). Main thread only. Zero allocation.</summary>
         public static void Publish<T>(ref T message) where T : struct, ICommand
             => s_bus.Publish(ref message);
 
@@ -112,8 +148,8 @@ namespace Tutan.Messages
         public static int ChannelCount => s_bus.ChannelCount;
 
         /// <summary>
-        /// Clear all handlers and queued messages.
-        /// Call during test teardown.
+        /// Clear all handlers and queued messages: commands still waiting for the
+        /// next drain are discarded, not dispatched. Call during test teardown.
         /// </summary>
         public static void Reset() { s_bus.Dispose(); s_bus = new MessageBus<ICommand>(MessagesInstrumentation.BusKind.Command); }
 

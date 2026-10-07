@@ -18,9 +18,12 @@ namespace Tutan.Messages.Samples.BasicPubSub
     /// <c>[MessagesHost]</c>, so there is nothing else to wire — just press Play.
     /// </para>
     /// <para>
-    /// Everything it builds (<see cref="ScoreHud"/>, <see cref="ScoreDecayWorker"/>, the
-    /// models) talks exclusively through the bus, never to each other. The N:1 guarantee
-    /// for <see cref="AdjustScore"/> is enforced by <see cref="CommandBus.Install"/>:
+    /// Everything it builds (the models and <see cref="ScoreDecayWorker"/>) and
+    /// <see cref="ScoreHud"/> talk exclusively through the bus, never to each other.
+    /// Only this root holds direct references: to what it builds (the models, and
+    /// the worker it starts and stops) and to the two HUDs, to switch them and to
+    /// hand the final score to <see cref="MenuHud"/>. The N:1 guarantee for
+    /// <see cref="AdjustScore"/> is enforced by <see cref="CommandBus.Install"/>:
     /// exactly one handler owns the command no matter who publishes it.
     /// </para>
     /// </summary>
@@ -100,10 +103,25 @@ namespace Tutan.Messages.Samples.BasicPubSub
             if (eventSystem.GetComponent<BaseInputModule>() != null) return;
 
 #if ENABLE_INPUT_SYSTEM
+            // ENABLE_INPUT_SYSTEM follows Active Input Handling, not whether the
+            // com.unity.inputsystem package is installed. A direct type reference would
+            // then break all of Assembly-CSharp, so look the module up by name; the
+            // constant string also lets the linker keep it in stripped player builds.
             // With no actions asset assigned, the module binds its default UI actions.
-            eventSystem.gameObject.AddComponent<UnityEngine.InputSystem.UI.InputSystemUIInputModule>();
-#else
+            var inputSystemModule = System.Type.GetType(
+                "UnityEngine.InputSystem.UI.InputSystemUIInputModule, Unity.InputSystem");
+            if (inputSystemModule != null)
+            {
+                eventSystem.gameObject.AddComponent(inputSystemModule);
+                return;
+            }
+#endif
+#if ENABLE_LEGACY_INPUT_MANAGER
             eventSystem.gameObject.AddComponent<StandaloneInputModule>();
+#else
+            Debug.LogWarning("[BasicPubSub] No UI input module available, so the buttons "
+                + "will not respond. Install the Input System package (com.unity.inputsystem), "
+                + "or set Player Settings > Active Input Handling to Both or Input Manager (Old).");
 #endif
         }
     }

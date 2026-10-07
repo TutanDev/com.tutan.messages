@@ -1,11 +1,11 @@
-[Home](index) · **Why this library** · [API Reference](API-Reference) · [Examples](Examples) · [Threading](Threading) · [Performance](Performance) · [Edge Cases](EdgeCases) · [Architecture](Architecture) · [Bootstrap](Bootstrap) · [Editor](Editor)
+[Home](index.md) · **Why this library** · [API Reference](API-Reference.md) · [Examples](Examples.md) · [Threading](Threading.md) · [Performance](Performance.md) · [Edge Cases](EdgeCases.md) · [Architecture](Architecture.md) · [Bootstrap](Bootstrap.md) · [Editor](Editor.md)
 
 ---
 
 # Messages
 
 **Namespace:** `Tutan.Messages`
-**Target:** Unity 6.1 (6000.1) and newer (CoreCLR friendly), XR applications
+**Target:** Unity 6000.3 LTS or newer, XR applications
 
 ## Why a Message Bus
 
@@ -34,7 +34,9 @@ of even 1–2 ms can cause a dropped frame, directly causing user discomfort.
 This drives every design decision:
 
 - **Messages are `struct`** — generic specialization plus `ref`-passing keeps
-  dispatch allocation-free; the message is never boxed or heap-stored.
+  dispatch allocation-free; the message is never boxed. `Publish` passes it by
+  `ref`, and `Enqueue` copies it into a reusable per-type queue buffer (no
+  per-message allocation).
 - **Handlers receive `ref T`** — no struct copy on dispatch.
 - **Subscriptions are disposable handles** — no delegate-equality problems, no `-=`.
 - **No multicast delegates** — `Delegate.Combine` allocates.
@@ -48,8 +50,9 @@ This drives every design decision:
 
 A message is any `struct` implementing `IEvent` or `ICommand` (both extend
 `IMessage`). Dispatch is allocation-free for any struct: the bus is generic over
-the message type and passes it by `ref`, so the message is never boxed or
-heap-stored.
+the message type and passes it by `ref`, so the message is never boxed. A queued
+message is copied into a reusable per-type `ConcurrentQueue` buffer, again
+without a per-message allocation.
 
 ```csharp
 // Recommended — all fields are value types (no GC scan, safe across threads)
@@ -80,9 +83,10 @@ public struct LogLine : IEvent
 **Reference-type fields are allowed but not free.** Two caveats apply when a
 message carries a `string`, array, collection, or class reference:
 
-- A message sitting in the deferred queue is a GC root — the garbage collector
-  must scan it during the mark phase for as long as it waits to be drained. This
-  is a scan cost, not an allocation, and dispatch itself stays allocation-free.
+- A message sitting in the deferred queue is reachable from the bus, so the
+  garbage collector must trace its reference fields during the mark phase for as
+  long as it waits to be drained. This is a scan cost, not an allocation, and
+  dispatch itself stays allocation-free.
 - `Enqueue` copies the struct *shallowly*. A worker thread that enqueues a
   message shares any referenced object with the main thread that drains it, so
   treat such payloads as immutable handoffs.
@@ -96,11 +100,14 @@ lookup table — both keep the message fully value-typed.
 
 - **`IEvent`** — a notification of something that *happened*. Any number of
   handlers may subscribe. Naming: past tense (`PlayerScored`, `OrderPlaced`).
-- **`ICommand`** — an *intent* to do something. Exactly one handler is bound,
+- **`ICommand`** — an *intent* to do something. At most one handler is bound,
   once, at the composition root via `CommandBus.Install`. Naming: imperative
   (`MovePlayer`, `PlaceOrder`). This enforces the CQRS rule: the N:1 constraint
   is validated at install time and a duplicate (or null) handler is reported in
-  the returned `InstallResult`, not thrown.
+  the returned `InstallResult`, not thrown. Binding is not required: publishing
+  or enqueuing a command with no handler is a silent no-op, so for commands that
+  must be handled, assert `CommandBus.GetSubscriberCount<T>() == 1` once after
+  `Install`.
 
 ### Handlers
 
@@ -130,9 +137,9 @@ avoids the fragility of delegate equality checks with lambdas and closures
 
 Queued messages are dispatched on the main thread when `DrainQueues()` is
 called. The bundled `MessagesHost` calls this in `LateUpdate` and is
-auto-instantiated at startup — see [Bootstrap](Bootstrap).
+auto-instantiated at startup — see [Bootstrap](Bootstrap.md).
 
 ---
 
-Next: [API Reference](API-Reference) for the full method surface, or
-[Examples](Examples) for end-to-end usage.
+Next: [API Reference](API-Reference.md) for the full method surface, or
+[Examples](Examples.md) for end-to-end usage.

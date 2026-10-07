@@ -8,7 +8,7 @@ namespace Tutan.Messages.Tests
 {
     // ── RelaxedConstraintTests ───────────────────────────────────────────
     //
-    // Since 1.3.0 messages only need `where T : struct` (was `unmanaged`), so a
+    // Since 0.18.0 messages only need `where T : struct` (was `unmanaged`), so a
     // message may carry reference-type fields. These tests prove such messages
     // compile and round-trip through both the immediate and deferred paths, and
     // that dispatch of a plain value-type message stays allocation-free.
@@ -23,8 +23,24 @@ namespace Tutan.Messages.Tests
         // Plain value-type message for the allocation assertion.
         struct Tick : IEvent { public int Frame; }
 
-        [SetUp]    public void SetUp()    => EventBus.Reset();
-        [TearDown] public void TearDown() => EventBus.Reset();
+        bool _prevInstrumentation;
+
+        [SetUp]
+        public void SetUp()
+        {
+            // An open Messages Console enables instrumentation, which boxes every
+            // publish; the allocation assertion must measure the bus alone.
+            _prevInstrumentation = MessagesInstrumentation.Enabled;
+            MessagesInstrumentation.Enabled = false;
+            EventBus.Reset();
+        }
+
+        [TearDown]
+        public void TearDown()
+        {
+            MessagesInstrumentation.Enabled = _prevInstrumentation;
+            EventBus.Reset();
+        }
 
         [Test]
         public void Publish_MessageWithStringField_DeliversPayloadIntact()

@@ -2,8 +2,13 @@
   "name": "com.tutan.messages",
   "displayName": "Tutan Messages",
   "version": "1.0.0",
-  "unity": "6000.1",
-  "description": "Zero-allocation, struct-based publish/subscribe message bus for Unity 6 and XR. Ref-passed handlers, disposable subscriptions with lifetime helpers (SubscriptionBag, AddTo), thread-safe enqueue, automatic LateUpdate draining, and dedicated EventBus (N:M) and CommandBus (N:1) APIs. Built for XR frame budgets \u2014 no GC in the dispatch hot path.",
+  "unity": "6000.3",
+  "unityRelease": "0f1",
+  "description": "Zero-allocation, struct-based publish/subscribe message bus for Unity 6 and XR: ref-passed handlers, disposable subscriptions, thread-safe enqueue, EventBus (N:M) and CommandBus (N:1).",
+  "dependencies": {
+    "com.unity.ext.nunit": "2.0.5",
+    "com.unity.test-framework": "1.6.0"
+  },
   "keywords": [
     "messages",
     "pubsub",
@@ -27,7 +32,7 @@
   "samples": [
     {
       "displayName": "Basic Publish / Subscribe",
-      "description": "A live score driven by both buses: a button publishes commands, a background thread enqueues commands off the main thread, and the score UI listens for events. One self-contained scene, no wiring.",
+      "description": "A live score driven by both buses: a button publishes commands, a background thread enqueues commands off the main thread (a coroutine on Web players), and the score UI listens for events. One self-contained scene; requires uGUI.",
       "path": "Samples~/BasicPubSub"
     }
   ]

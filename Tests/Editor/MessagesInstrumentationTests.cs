@@ -1,29 +1,57 @@
 using System.Linq;
 using System.Threading;
-using System.Threading.Tasks;
 using NUnit.Framework;
 using Tutan.Messages;
+using UnityEngine.TestTools.Constraints;
+using GCConstraint = UnityEngine.TestTools.Constraints.Is;
 
 namespace Tutan.Messages.Tests
 {
+    // Instrumentation is global state that an open Messages Console also drives
+    // (Enabled, RecordDrains), so each test saves it, runs in a known state and
+    // restores it. The ring buffer is cleared around each test, which cannot be
+    // undone: the console keeps the rows it already shows but never sees the
+    // tests' records.
     public class MessagesInstrumentationTests
     {
         struct Ping : IEvent { public int Value; }
         struct DoThing : ICommand { public int Value; }
 
+        interface IGameCommand : ICommand { }
+        struct Jump : IGameCommand { }
+
+        bool _prevEnabled;
+        bool _prevRecordDrains;
+        int _prevCapacity;
+
         [SetUp]
         public void SetUp()
         {
+            _prevEnabled = MessagesInstrumentation.Enabled;
+            _prevRecordDrains = MessagesInstrumentation.RecordDrains;
+            _prevCapacity = MessagesInstrumentation.Capacity;
+
+            // Back to the default: project code may have shrunk the ring buffer,
+            // and the tests count on it holding every record they write.
+            if (_prevCapacity != 4096)
+                MessagesInstrumentation.SetCapacity(4096);
+
             EventBus.Reset();
             CommandBus.Reset();
             MessagesInstrumentation.Clear();
+            MessagesInstrumentation.RecordDrains = false;
             MessagesInstrumentation.Enabled = true;
         }
 
         [TearDown]
         public void TearDown()
         {
-            MessagesInstrumentation.Enabled = false;
+            // Runs even when a test fails midway, so a shrunken capacity can never
+            // leak into the next test.
+            if (MessagesInstrumentation.Capacity != _prevCapacity)
+                MessagesInstrumentation.SetCapacity(_prevCapacity);
+            MessagesInstrumentation.Enabled = _prevEnabled;
+            MessagesInstrumentation.RecordDrains = _prevRecordDrains;
             MessagesInstrumentation.Clear();
             EventBus.Reset();
             CommandBus.Reset();
@@ -68,36 +96,83 @@ namespace Tutan.Messages.Tests
         }
 
         [Test]
+        public void StandaloneBus_TagsRecordsByItsBaseType()
+        {
+            // A bus built with the public constructor has no facade to tag it, so
+            // the kind comes from TBase: ICommand, or an interface deriving from it,
+            // is Command; anything else is Event.
+            Assert.AreEqual(MessagesInstrumentation.BusKind.Command,
+                PublishedKind(new MessageBus<ICommand>(), new DoThing()));
+            Assert.AreEqual(MessagesInstrumentation.BusKind.Command,
+                PublishedKind(new MessageBus<IGameCommand>(), new Jump()));
+            Assert.AreEqual(MessagesInstrumentation.BusKind.Event,
+                PublishedKind(new MessageBus<IEvent>(), new Ping()));
+        }
+
+        static MessagesInstrumentation.BusKind PublishedKind<TBase, T>(MessageBus<TBase> bus, T message)
+            where TBase : IMessage
+            where T : struct, TBase
+        {
+            try
+            {
+                MessagesInstrumentation.Clear();
+                bus.Publish(message);
+                return MessagesInstrumentation.Snapshot()
+                    .Single(r => r.Op == MessagesInstrumentation.Op.Publish && r.MessageType == typeof(T))
+                    .Bus;
+            }
+            finally
+            {
+                bus.Dispose();
+            }
+        }
+
+        [Test]
         public void Enqueue_FromWorkerThread_RecordsOnAnyThread_AndPreservesOrder()
         {
             EventBus.Subscribe<Ping>((ref Ping p) => { });
+            int mainThreadId = Thread.CurrentThread.ManagedThreadId;
 
-            int countBefore = MessagesInstrumentation.Snapshot().Count;
-
-            Task.Run(() =>
+            // A dedicated thread rather than the pool, so its id is known.
+            var worker = new Thread(() =>
             {
                 for (int i = 0; i < 50; i++)
                     EventBus.Enqueue(new Ping { Value = i });
-            }).Wait();
+            });
+            worker.Start();
+            worker.Join();
 
             EventBus.DrainQueues();
 
             var snap = MessagesInstrumentation.Snapshot();
-            int enq = snap.Count(r => r.Op == MessagesInstrumentation.Op.Enqueue && r.MessageType == typeof(Ping));
-            int pub = snap.Count(r => r.Op == MessagesInstrumentation.Op.Publish && r.MessageType == typeof(Ping));
-            Assert.AreEqual(50, enq);
-            Assert.AreEqual(50, pub);
-            Assert.IsTrue(snap.Count > countBefore);
+            var enqueues = snap.Where(r => r.Op == MessagesInstrumentation.Op.Enqueue && r.MessageType == typeof(Ping)).ToList();
+            var publishes = snap.Where(r => r.Op == MessagesInstrumentation.Op.Publish && r.MessageType == typeof(Ping)).ToList();
+            Assert.AreEqual(50, enqueues.Count);
+            Assert.AreEqual(50, publishes.Count);
+            Assert.AreNotEqual(mainThreadId, worker.ManagedThreadId);
+
+            for (int i = 0; i < 50; i++)
+            {
+                // Enqueues carry the worker's thread id; the drain dispatches them on
+                // the main thread, in the same order.
+                Assert.AreEqual(worker.ManagedThreadId, enqueues[i].ThreadId, $"Enqueue record {i}");
+                Assert.AreEqual(i, ((Ping)enqueues[i].PayloadBox).Value, $"Enqueue record {i}");
+                Assert.AreEqual(mainThreadId, publishes[i].ThreadId, $"Publish record {i}");
+                Assert.AreEqual(i, ((Ping)publishes[i].PayloadBox).Value, $"Publish record {i}");
+            }
         }
 
         [Test]
         public void Unsubscribe_RecordsUnsubscribeOp_OnlyOnSuccess()
         {
             var subscription = EventBus.Subscribe<Ping>((ref Ping p) => { });
+            var copy = subscription;
             MessagesInstrumentation.Clear();
 
             subscription.Dispose();
-            subscription.Dispose(); // idempotent — must not record a second op
+            // The copy still references the bus, so this reaches its Unsubscribe,
+            // which finds the token already removed and must not record again.
+            copy.Dispose();
 
             int count = MessagesInstrumentation.Snapshot()
                 .Count(r => r.Op == MessagesInstrumentation.Op.Unsubscribe);
@@ -117,17 +192,38 @@ namespace Tutan.Messages.Tests
         [Test]
         public void RingBuffer_WrapsAroundAtCapacity()
         {
-            MessagesInstrumentation.SetCapacity(16);
-            MessagesInstrumentation.Enabled = true;
+            MessagesInstrumentation.SetCapacity(16); // TearDown restores the previous capacity
             EventBus.Subscribe<Ping>((ref Ping p) => { });
 
             for (int i = 0; i < 100; i++)
                 EventBus.Publish(new Ping { Value = i });
 
-            Assert.AreEqual(16, MessagesInstrumentation.Snapshot().Count);
+            // Oldest first: only the last 16 publishes survive the wraparound.
+            var snap = MessagesInstrumentation.Snapshot();
+            Assert.AreEqual(16, snap.Count);
+            Assert.AreEqual(84, ((Ping)snap[0].PayloadBox).Value);
+            Assert.AreEqual(99, ((Ping)snap[15].PayloadBox).Value);
+        }
 
-            // Reset capacity to default for other tests.
-            MessagesInstrumentation.SetCapacity(4096);
+        [Test]
+        public void SetCapacity_DiscardsRecords_WithoutAllocating()
+        {
+            EventBus.Publish(new Ping { Value = 1 });
+            Assert.AreEqual(1, MessagesInstrumentation.Count);
+
+            // The ring buffer is reallocated by the next recorded operation, not
+            // here, so code that only configures instrumentation allocates nothing.
+            Assert.That(() => MessagesInstrumentation.SetCapacity(64), GCConstraint.Not.AllocatingGCMemory());
+            Assert.AreEqual(64, MessagesInstrumentation.Capacity);
+            Assert.AreEqual(0, MessagesInstrumentation.Count);
+            Assert.AreEqual(0, MessagesInstrumentation.Snapshot().Count);
+
+            EventBus.Publish(new Ping { Value = 2 });
+            var rec = MessagesInstrumentation.Snapshot().Single();
+            Assert.AreEqual(2, ((Ping)rec.PayloadBox).Value);
+
+            MessagesInstrumentation.SetCapacity(1);
+            Assert.AreEqual(16, MessagesInstrumentation.Capacity); // clamped to the minimum
         }
 
         [Test]

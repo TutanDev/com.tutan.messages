@@ -183,8 +183,8 @@ namespace Tutan.Messages.Tests
         [Test]
         public void AnchorBagDispose_UnsubscribesItsSubscriptions()
         {
-            // OnDestroy → Bag.Dispose() only fires in play mode; in this edit-mode
-            // test we drive the bag directly and verify the disposal path itself.
+            // Drives the bag directly, isolating the disposal path from Unity's
+            // OnDestroy; DestroyingTheGameObject_DisposesItsSubscriptions covers that.
             int callCount = 0;
             EventBus.Subscribe<PlayerMoved>((ref PlayerMoved m) => callCount++).AddTo(_go);
 
@@ -195,9 +195,26 @@ namespace Tutan.Messages.Tests
         }
 
         [Test]
+        public void DestroyingTheGameObject_DisposesItsSubscriptions()
+        {
+            // The anchor is [ExecuteAlways], so its OnDestroy runs in edit mode too —
+            // the path an [ExecuteAlways] script's AddTo(this) relies on.
+            int callCount = 0;
+            EventBus.Subscribe<PlayerMoved>((ref PlayerMoved m) => callCount++).AddTo(_go);
+
+            Object.DestroyImmediate(_go);
+
+            Assert.AreEqual(0, EventBus.GetSubscriberCount<PlayerMoved>());
+            EventBus.Publish(new PlayerMoved());
+            Assert.AreEqual(0, callCount);
+        }
+
+        [Test]
         public void AddToComponent_AnchorsToItsGameObject()
         {
-            var component = _go.AddComponent<BoxCollider>();
+            // Transform: a component every GameObject has, so the test assembly
+            // needs no optional built-in module (Physics, etc.).
+            Component component = _go.transform;
 
             EventBus.Subscribe<PlayerMoved>((ref PlayerMoved m) => { }).AddTo(component);
 

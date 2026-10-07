@@ -12,4 +12,4 @@ republication of the source on public repositories, marketplaces, or asset
 bundles — is not permitted.
 
 For licensing inquiries beyond the Asset Store EULA (site licenses, source
-escrow, OEM redistribution), contact the publisher.
+escrow, OEM redistribution), contact the publisher at andrespino.95@gmail.com.

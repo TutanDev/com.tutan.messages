@@ -7,8 +7,9 @@ namespace Tutan.Messages
     /// <summary>
     /// Collects <see cref="Subscription"/>s so a whole group can be unsubscribed
     /// with one <see cref="Dispose"/> (or <see cref="Clear"/>) call — one bag per
-    /// system instead of one token field per subscription. Reusable after
-    /// disposal: <c>Add</c> works again and a later Dispose releases the new batch.
+    /// system instead of one <see cref="Subscription"/> field per subscription.
+    /// Reusable after disposal: <c>Add</c> works again and a later Dispose
+    /// releases the new batch.
     /// Main thread only, like the Subscribe/Unsubscribe calls it wraps.
     /// </summary>
     public sealed class SubscriptionBag : IDisposable
@@ -50,9 +51,12 @@ namespace Tutan.Messages
     /// anchored to a GameObject that is destroyed without ever having been active
     /// (e.g. a pooled instance created inactive) is therefore not disposed — hold
     /// the <see cref="Subscription"/> or use a <see cref="SubscriptionBag"/> for
-    /// those lifetimes.
+    /// those lifetimes. The anchor is <c>[ExecuteAlways]</c>, so destroying its
+    /// GameObject disposes the bag in edit mode too (<c>AddTo</c> called from an
+    /// <c>[ExecuteAlways]</c> script).
     /// </remarks>
     [AddComponentMenu("")]
+    [ExecuteAlways]
     public sealed class SubscriptionAnchor : MonoBehaviour
     {
         internal SubscriptionBag Bag { get; } = new SubscriptionBag();

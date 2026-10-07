@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Threading;
 using UnityEngine;
 
@@ -11,7 +12,7 @@ namespace Tutan.Messages.Samples.BasicPubSub
     /// stands in for anything that does not live on the main thread — a timer,
     /// network tick, simulation step.
     /// <para>
-    /// It cannot call <see cref="CommandBus.Publish"/> — that is main-thread only.
+    /// It cannot call <see cref="CommandBus.Publish{T}(T)"/> — that is main-thread only.
     /// Instead it uses <see cref="CommandBus.Enqueue"/>, which is thread-safe. The
     /// queued command is dispatched on the main thread by <c>MessagesHost</c> in the
     /// next <c>LateUpdate</c>, so <see cref="ScoreModel"/> still runs where it is safe
@@ -22,12 +23,41 @@ namespace Tutan.Messages.Samples.BasicPubSub
     /// command to the very same handler — one sync, one async — which is exactly the
     /// N:1 guarantee the CommandBus exists to provide.
     /// </para>
+    /// <para>
+    /// Web players have no managed threads, so there the same ticks are enqueued from
+    /// a coroutine on the main thread instead; everything downstream is unchanged.
+    /// </para>
     /// </summary>
     public sealed class ScoreDecayWorker : MonoBehaviour
     {
+        const int TickMs = 1000;
+
         // Grows (more negative) by one each tick — the decay accelerates over time.
         int _nextDecayDelta = -1;
 
+        void EnqueueDecayTick()
+        {
+            // Thread-safe hand-off. Dispatched on the main thread at the next drain.
+            CommandBus.Enqueue(new AdjustScore { Delta = _nextDecayDelta-- });
+        }
+
+#if UNITY_WEBGL && !UNITY_EDITOR
+        // Thread.Start() throws on Web players, which would leave the game unable to
+        // end. A coroutine keeps the same one-second cadence on the main thread.
+        void OnEnable() => StartCoroutine(DecayRoutine());
+
+        void OnDisable() => StopAllCoroutines();
+
+        IEnumerator DecayRoutine()
+        {
+            var tick = new WaitForSeconds(TickMs / 1000f);
+            while (true)
+            {
+                yield return tick;
+                EnqueueDecayTick();
+            }
+        }
+#else
         Thread _thread;
         volatile bool _running;
 
@@ -40,8 +70,10 @@ namespace Tutan.Messages.Samples.BasicPubSub
 
         void OnDisable()
         {
-            // Signal the loop to stop and wait for it to unwind, so it cannot enqueue a
-            // stray decay tick after the game has ended.
+            // Signal the loop to stop and wait for it to unwind, so the thread is gone
+            // once OnDisable returns. A tick it already queued — or queued between game
+            // over and this OnDisable, which Destroy() defers to the end of the frame —
+            // still reaches ScoreModel, whose game-over guard ignores it.
             _running = false;
             _thread?.Join();
             _thread = null;
@@ -59,12 +91,12 @@ namespace Tutan.Messages.Samples.BasicPubSub
             {
                 Thread.Sleep(SliceMs);
                 elapsed += SliceMs;
-                if (elapsed < 1000) continue;
+                if (elapsed < TickMs) continue;
                 elapsed = 0;
 
-                // Thread-safe hand-off. Dispatched on the main thread next frame.
-                CommandBus.Enqueue(new AdjustScore { Delta = _nextDecayDelta-- });
+                EnqueueDecayTick();
             }
         }
+#endif
     }
 }

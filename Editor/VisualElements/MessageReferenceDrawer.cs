@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using UnityEditor;
 using UnityEditor.UIElements;
 using UnityEngine;
@@ -34,37 +35,68 @@ namespace Tutan.Messages.Editor
                 return container;
             }
 
-            // Structs only: the bus API is constrained to `where T : struct`, so a
-            // class implementing IEvent/ICommand could never be published.
-            var types = TypeCache.GetTypesDerivedFrom(baseType)
-                .Where(t => !t.IsAbstract && !t.IsInterface && t.IsValueType)
-                .OrderBy(t => t.Name)
-                .ToList();
+            var types = ListMessageTypes(baseType);
 
-            var labels = BuildTypeLabels(types);
+            // What the popup was last built from. Rebuilding (not just re-selecting)
+            // keeps the "(Missing)" entry and its warning in step with the value.
+            string shownValue = null;
+            bool shownMixed = false;
 
-            var values = types.Select(t => t.AssemblyQualifiedName).ToList();
-            values.Insert(0, string.Empty);
-
-            var currentIndex = ResolveSelection(property.stringValue, types, values, labels, out bool missing);
-
-            // The popup is index-based: two types can share a short name (same
-            // struct name, different namespace), so mapping the selection back
-            // through the display string would resolve to the wrong type.
-            var popup = new PopupField<int>(
-                property.displayName, Enumerable.Range(0, values.Count).ToList(), currentIndex,
-                i => labels[i], i => labels[i]);
-            popup.RegisterValueChangedCallback(evt =>
+            void Rebuild()
             {
-                property.stringValue = values[evt.newValue];
-                property.serializedObject.ApplyModifiedProperties();
+                container.Clear();
+                shownValue = property.stringValue;
+                shownMixed = property.hasMultipleDifferentValues;
+
+                var labels = BuildTypeLabels(types);
+                var values = types.Select(t => t.AssemblyQualifiedName).ToList();
+                values.Insert(0, string.Empty);
+
+                var currentIndex = ResolveSelection(shownValue, types, values, labels, out bool missing);
+
+                // The popup is index-based: two types can share a short name (same
+                // struct name, different namespace), so mapping the selection back
+                // through the display string would resolve to the wrong type.
+                var popup = new PopupField<int>(
+                    property.displayName, Enumerable.Range(0, values.Count).ToList(), currentIndex,
+                    i => labels[i], i => labels[i]);
+                // Differing values across a multi-selection show as mixed; a pick
+                // writes the one type to every selected object.
+                popup.showMixedValue = shownMixed;
+                popup.RegisterValueChangedCallback(evt =>
+                {
+                    property.stringValue = values[evt.newValue];
+                    property.serializedObject.ApplyModifiedProperties();
+                    Rebuild();
+                });
+
+                container.Add(popup);
+                if (missing && !shownMixed)
+                    container.Add(MissingTypeWarning(shownValue));
+            }
+
+            // Undo/redo, prefab revert and other inspectors change the string without
+            // going through the popup. The drawer's own writes arrive here too and
+            // are skipped because Rebuild already shows them.
+            container.TrackPropertyValue(property, p =>
+            {
+                if (p.stringValue != shownValue || p.hasMultipleDifferentValues != shownMixed)
+                    Rebuild();
             });
 
-            container.Add(popup);
-            if (missing)
-                container.Add(MissingTypeWarning(property.stringValue));
+            Rebuild();
             return container;
         }
+
+        // The structs a dropdown for `baseType` offers. Structs only: the bus API is
+        // constrained to `where T : struct`, so a class implementing IEvent/ICommand
+        // could never be published. Open generics (EntityChanged<T>) are excluded
+        // too: without type arguments they can't be instantiated or published.
+        internal static List<Type> ListMessageTypes(Type baseType) =>
+            TypeCache.GetTypesDerivedFrom(baseType)
+                .Where(t => !t.IsAbstract && !t.IsInterface && t.IsValueType && !t.ContainsGenericParameters)
+                .OrderBy(t => t.Name)
+                .ToList();
 
         // Display labels for a "(None)" + types popup. Types whose short name
         // collides with another entry are shown with their full name so the two
@@ -138,10 +170,12 @@ namespace Tutan.Messages.Editor
 
     /// <summary>
     /// Inspector for <see cref="EventReference"/> / <see cref="CommandReference"/>
-    /// (and subclasses): a type dropdown, an inline editor for the struct's public
-    /// fields (serialized to JSON), and a ▶ button that publishes the message
-    /// immediately. Works for plain fields as well as arrays and lists of
-    /// references. UI Toolkit only (no IMGUI fallback).
+    /// (and subclasses): a type dropdown, an inline editor for the struct's
+    /// serialized public fields (stored as JSON), and a ▶ button that publishes the
+    /// message immediately through the reference's own <c>Publish()</c>. Works for
+    /// plain fields as well as arrays and lists of references. With several objects
+    /// selected, the payload is editable only while they all hold the same message.
+    /// UI Toolkit only (no IMGUI fallback).
     /// </summary>
     [CustomPropertyDrawer(typeof(MessageReference), true)]
     public class MessageReferenceDrawer : PropertyDrawer
@@ -168,121 +202,162 @@ namespace Tutan.Messages.Editor
             else if (typeof(CommandReference).IsAssignableFrom(referenceType))
                 baseType = typeof(ICommand);
 
-            var types = TypeCache.GetTypesDerivedFrom(baseType)
-                .Where(t => !t.IsAbstract && !t.IsInterface && t.IsValueType) // Bus wants structs
-                .OrderBy(t => t.Name)
-                .ToList();
+            var types = MessageTypeDrawer.ListMessageTypes(baseType);
 
-            var labels = MessageTypeDrawer.BuildTypeLabels(types);
-            var values = types.Select(t => t.AssemblyQualifiedName).ToList();
-            values.Insert(0, string.Empty);
+            // The serialized values the UI was last built from or last wrote. The
+            // trackers at the bottom rebuild when the stored values stop matching
+            // (undo/redo, prefab revert, another inspector); the drawer's own writes
+            // update these first, so their echoes are skipped and a field being
+            // typed into keeps its focus.
+            string shownType = null;
+            string shownJson = null;
+            bool shownMixed = false;
 
-            int currentIndex = MessageTypeDrawer.ResolveSelection(
-                typeNameProp.stringValue, types, values, labels, out bool missing);
+            bool IsMixed() => typeNameProp.hasMultipleDifferentValues || dataJsonProp.hasMultipleDifferentValues;
 
-            // Index-based for the same reason as MessageTypeDrawer: duplicate
-            // short names must not resolve to the first match.
-            var typePopup = new PopupField<int>(
-                property.displayName, Enumerable.Range(0, values.Count).ToList(), currentIndex,
-                i => labels[i], i => labels[i]);
-            typePopup.style.flexGrow = 1;
-
-            var headerRow = new VisualElement();
-            headerRow.style.flexDirection = FlexDirection.Row;
-            headerRow.Add(typePopup);
-
-            var publishBtn = new Button();
-            publishBtn.tooltip = "Publish Message (Synthetic)";
-            publishBtn.style.width = 20;
-            publishBtn.style.height = 18;
-            publishBtn.style.marginLeft = 2;
-            publishBtn.style.paddingLeft = 0;
-            publishBtn.style.paddingRight = 0;
-            publishBtn.style.paddingTop = 0;
-            publishBtn.style.paddingBottom = 0;
-
-            // Use a built-in Unity icon
-            var icon = EditorGUIUtility.IconContent("d_PlayButton").image as Texture2D;
-            publishBtn.style.backgroundImage = icon;
-
-            publishBtn.clicked += () =>
+            void Rebuild()
             {
-                if (string.IsNullOrEmpty(typeNameProp.stringValue)) return;
+                root.Clear();
+                shownType = typeNameProp.stringValue;
+                shownJson = dataJsonProp.stringValue;
+                shownMixed = IsMixed();
 
-                // Build the reference matching the field category (baseType was
-                // resolved above), copy the serialized values straight in — the
-                // fields are internal and this Editor assembly has InternalsVisibleTo
-                // access — and dispatch through the virtual Publish().
-                MessageReference tempRef = baseType == typeof(IEvent) ? new EventReference()
-                                         : baseType == typeof(ICommand) ? new CommandReference()
-                                         : null;
-                if (tempRef == null) return;
+                var labels = MessageTypeDrawer.BuildTypeLabels(types);
+                var values = types.Select(t => t.AssemblyQualifiedName).ToList();
+                values.Insert(0, string.Empty);
 
-                tempRef.typeName = typeNameProp.stringValue;
-                tempRef.dataJson = dataJsonProp.stringValue;
-                tempRef.Publish();
-            };
+                int currentIndex = MessageTypeDrawer.ResolveSelection(
+                    shownType, types, values, labels, out bool missing);
 
-            headerRow.Add(publishBtn);
-            root.Add(headerRow);
+                // Index-based for the same reason as MessageTypeDrawer: duplicate
+                // short names must not resolve to the first match.
+                var typePopup = new PopupField<int>(
+                    property.displayName, Enumerable.Range(0, values.Count).ToList(), currentIndex,
+                    i => labels[i], i => labels[i]);
+                typePopup.style.flexGrow = 1;
+                typePopup.showMixedValue = typeNameProp.hasMultipleDifferentValues;
+                typePopup.RegisterValueChangedCallback(evt =>
+                {
+                    typeNameProp.stringValue = values[evt.newValue];
+                    dataJsonProp.stringValue = string.Empty; // Reset data on type change
+                    typeNameProp.serializedObject.ApplyModifiedProperties();
+                    Rebuild();
+                });
 
-            // An unresolved stored type can't be published — gate the button and say why.
-            publishBtn.SetEnabled(!missing && !string.IsNullOrEmpty(typeNameProp.stringValue));
-            if (missing)
-                root.Add(MessageTypeDrawer.MissingTypeWarning(typeNameProp.stringValue));
+                var headerRow = new VisualElement();
+                headerRow.style.flexDirection = FlexDirection.Row;
+                headerRow.Add(typePopup);
 
-            var dataContainer = new VisualElement();
-            dataContainer.style.marginLeft = 15;
-            root.Add(dataContainer);
+                var publishBtn = new Button();
+                publishBtn.style.width = 20;
+                publishBtn.style.height = 18;
+                publishBtn.style.marginLeft = 2;
+                publishBtn.style.paddingLeft = 0;
+                publishBtn.style.paddingRight = 0;
+                publishBtn.style.paddingTop = 0;
+                publishBtn.style.paddingBottom = 0;
 
-            Action RefreshDataUI = () =>
+                // The un-prefixed name resolves to the current skin's variant
+                // ("d_PlayButton" is the dark-skin icon only).
+                var icon = EditorGUIUtility.IconContent("PlayButton").image as Texture2D;
+                publishBtn.style.backgroundImage = icon;
+
+                publishBtn.clicked += () =>
+                {
+                    if (string.IsNullOrEmpty(typeNameProp.stringValue)) return;
+
+                    // boxedValue deserializes a fresh copy of the stored reference,
+                    // with every serialized field a subclass adds, so its Publish()
+                    // override sees the inspector's values and nothing it mutates
+                    // carries over to the next click.
+                    (property.boxedValue as MessageReference)?.Publish();
+                };
+
+                // An unresolved stored type can't be published, and differing values
+                // across a multi-selection have no single message to publish.
+                publishBtn.SetEnabled(!missing && !shownMixed && !string.IsNullOrEmpty(shownType));
+                publishBtn.tooltip = shownMixed
+                    ? "The selected objects hold different messages; select one to publish it."
+                    : "Publish Message (Synthetic)";
+
+                headerRow.Add(publishBtn);
+                root.Add(headerRow);
+
+                if (missing && !typeNameProp.hasMultipleDifferentValues)
+                    root.Add(MessageTypeDrawer.MissingTypeWarning(shownType));
+
+                var dataContainer = new VisualElement();
+                dataContainer.style.marginLeft = 15;
+                root.Add(dataContainer);
+                BuildPayloadEditor(dataContainer);
+            }
+
+            void BuildPayloadEditor(VisualElement dataContainer)
             {
-                dataContainer.Clear();
-                if (string.IsNullOrEmpty(typeNameProp.stringValue)) return;
+                // Each edit re-serializes the whole payload into every selected
+                // object, which would overwrite the others' fields with the first
+                // object's values.
+                if (shownMixed)
+                {
+                    dataContainer.Add(new HelpBox(
+                        "The selected objects have different message types or payloads. Editing the " +
+                        "payload of several objects at once is not supported; select one object to edit it.",
+                        HelpBoxMessageType.Info));
+                    return;
+                }
 
-                var type = ScriptFileField.ResolveType(typeNameProp.stringValue);
+                if (string.IsNullOrEmpty(shownType)) return;
+
+                var type = ScriptFileField.ResolveType(shownType);
                 if (type == null) return;
 
-                // Create a temporary object to hold the data for editing
-                // We use JsonUtility to sync between the string and this object
-                object instance;
-                try
+                var instance = CreatePayload(type, shownJson);
+                if (instance == null)
                 {
-                    instance = string.IsNullOrEmpty(dataJsonProp.stringValue)
-                        ? Activator.CreateInstance(type)
-                        : JsonUtility.FromJson(dataJsonProp.stringValue, type);
-                }
-                catch
-                {
-                    instance = Activator.CreateInstance(type);
+                    dataContainer.Add(new HelpBox(
+                        $"Cannot create an instance of '{type.Name}', so its payload can't be edited here.",
+                        HelpBoxMessageType.Error));
+                    return;
                 }
 
                 // One native UI-Toolkit field per public field of the boxed struct.
-                // Each field writes back into the boxed `instance` via reflection and
-                // re-serializes it to the JSON property — the same data flow as before,
-                // just per-field instead of one IMGUI pass.
-                var fields = type.GetFields(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
-                foreach (var f in fields)
+                // `instance` only seeds the displayed values; each edit goes through
+                // Persist against the JSON as currently stored.
+                foreach (var f in type.GetFields(BindingFlags.Public | BindingFlags.Instance))
                 {
-                    dataContainer.Add(CreateFieldElement(f, instance, dataJsonProp));
+                    dataContainer.Add(IsJsonSerialized(f)
+                        ? CreateFieldElement(f, instance, v => Persist(type, f, v))
+                        : NotSerializedLabel(f));
                 }
-            };
+            }
 
-            typePopup.RegisterValueChangedCallback(evt =>
+            // Apply one edited field to a fresh copy of the stored payload, never to
+            // a box captured when the UI was built: after an undo or an external
+            // edit that box is stale, and writing it back would silently re-apply
+            // the values the user just undid.
+            void Persist(Type type, FieldInfo field, object value)
             {
-                typeNameProp.stringValue = values[evt.newValue];
-                dataJsonProp.stringValue = string.Empty; // Reset data on type change
-                typeNameProp.serializedObject.ApplyModifiedProperties();
-                // Resolve, don't just null-check: re-selecting the trailing
-                // "(Missing)" entry stores a non-empty but unresolvable value,
-                // and the publish button must stay gated for it.
-                publishBtn.SetEnabled(!string.IsNullOrEmpty(typeNameProp.stringValue)
-                    && ScriptFileField.ResolveType(typeNameProp.stringValue) != null);
-                RefreshDataUI();
-            });
+                var box = CreatePayload(type, dataJsonProp.stringValue);
+                if (box == null) return;
 
-            RefreshDataUI();
+                field.SetValue(box, value);
+                shownJson = JsonUtility.ToJson(box);
+                dataJsonProp.stringValue = shownJson;
+                dataJsonProp.serializedObject.ApplyModifiedProperties();
+            }
 
+            void OnTrackedChange(SerializedProperty _)
+            {
+                if (typeNameProp.stringValue != shownType
+                    || dataJsonProp.stringValue != shownJson
+                    || IsMixed() != shownMixed)
+                    Rebuild();
+            }
+
+            root.TrackPropertyValue(typeNameProp, OnTrackedChange);
+            root.TrackPropertyValue(dataJsonProp, OnTrackedChange);
+
+            Rebuild();
             return root;
         }
 
@@ -295,64 +370,90 @@ namespace Tutan.Messages.Editor
             return fieldType;
         }
 
-        // Builds a native UI-Toolkit field bound to one public field of the boxed
-        // struct `instance`. Edits write back through reflection and re-serialize the
-        // whole struct to `dataJsonProp`. Unknown types render a disabled label so the
-        // editor degrades gracefully instead of throwing.
-        private VisualElement CreateFieldElement(System.Reflection.FieldInfo field, object instance, SerializedProperty dataJsonProp)
+        // The stored payload, or the type's defaults when nothing is stored or the
+        // JSON doesn't parse (matching MessageReference.CreateMessage). Null when
+        // the type can't be instantiated at all.
+        static object CreatePayload(Type type, string json)
+        {
+            if (!string.IsNullOrEmpty(json))
+            {
+                try
+                {
+                    var parsed = JsonUtility.FromJson(json, type);
+                    if (parsed != null) return parsed;
+                }
+                catch (Exception)
+                {
+                    // Mangled JSON (merge conflict, hand edit): fall back to defaults.
+                }
+            }
+
+            try { return Activator.CreateInstance(type); }
+            catch (Exception) { return null; }
+        }
+
+        // JsonUtility skips readonly and [NonSerialized] fields, so an edit to one
+        // would look applied but never reach the stored JSON.
+        static bool IsJsonSerialized(FieldInfo field) => !field.IsInitOnly && !field.IsNotSerialized;
+
+        static VisualElement NotSerializedLabel(FieldInfo field)
+        {
+            string reason = field.IsInitOnly ? "readonly" : "[NonSerialized]";
+            var label = new Label($"{ObjectNames.NicifyVariableName(field.Name)}: not serialized ({reason})");
+            label.SetEnabled(false);
+            return label;
+        }
+
+        // Builds a native UI-Toolkit field showing one field of the boxed struct
+        // `instance`; each edit hands the new value to `persist`. Unknown types
+        // render a disabled label so the editor degrades gracefully instead of
+        // throwing.
+        private static VisualElement CreateFieldElement(FieldInfo field, object instance, Action<object> persist)
         {
             var label = ObjectNames.NicifyVariableName(field.Name);
             var type = field.FieldType;
             var val = field.GetValue(instance);
 
-            void Persist()
+            VisualElement Bind<T>(BaseField<T> el)
             {
-                dataJsonProp.stringValue = JsonUtility.ToJson(instance);
-                dataJsonProp.serializedObject.ApplyModifiedProperties();
-            }
-
-            // Wires a field's value-changed callback to the reflection write + persist.
-            VisualElement Bind<T>(BaseField<T> el, Action<T> write)
-            {
-                el.RegisterValueChangedCallback(evt =>
-                {
-                    write(evt.newValue);
-                    Persist();
-                });
+                el.RegisterValueChangedCallback(evt => persist(evt.newValue));
                 return el;
             }
 
             if (type == typeof(int))
-                return Bind(new IntegerField(label) { value = (int)val }, v => field.SetValue(instance, v));
+                return Bind(new IntegerField(label) { value = (int)val });
             if (type == typeof(long))
-                return Bind(new LongField(label) { value = (long)val }, v => field.SetValue(instance, v));
+                return Bind(new LongField(label) { value = (long)val });
             if (type == typeof(float))
-                return Bind(new FloatField(label) { value = (float)val }, v => field.SetValue(instance, v));
+                return Bind(new FloatField(label) { value = (float)val });
             if (type == typeof(double))
-                return Bind(new DoubleField(label) { value = (double)val }, v => field.SetValue(instance, v));
+                return Bind(new DoubleField(label) { value = (double)val });
             if (type == typeof(bool))
-                return Bind(new Toggle(label) { value = (bool)val }, v => field.SetValue(instance, v));
+                return Bind(new Toggle(label) { value = (bool)val });
             if (type == typeof(string))
-                return Bind(new TextField(label) { value = (string)val }, v => field.SetValue(instance, v));
+                return Bind(new TextField(label) { value = (string)val });
             if (type.IsEnum)
-                return Bind(new EnumField(label, (Enum)val), v => field.SetValue(instance, v));
+                return Bind(new EnumField(label, (Enum)val));
             if (type == typeof(Vector2))
-                return Bind(new Vector2Field(label) { value = (Vector2)val }, v => field.SetValue(instance, v));
+                return Bind(new Vector2Field(label) { value = (Vector2)val });
             if (type == typeof(Vector3))
-                return Bind(new Vector3Field(label) { value = (Vector3)val }, v => field.SetValue(instance, v));
+                return Bind(new Vector3Field(label) { value = (Vector3)val });
             if (type == typeof(Vector4))
-                return Bind(new Vector4Field(label) { value = (Vector4)val }, v => field.SetValue(instance, v));
+                return Bind(new Vector4Field(label) { value = (Vector4)val });
             if (type == typeof(Vector2Int))
-                return Bind(new Vector2IntField(label) { value = (Vector2Int)val }, v => field.SetValue(instance, v));
+                return Bind(new Vector2IntField(label) { value = (Vector2Int)val });
             if (type == typeof(Vector3Int))
-                return Bind(new Vector3IntField(label) { value = (Vector3Int)val }, v => field.SetValue(instance, v));
+                return Bind(new Vector3IntField(label) { value = (Vector3Int)val });
             if (type == typeof(Color))
-                return Bind(new ColorField(label) { value = (Color)val }, v => field.SetValue(instance, v));
+                return Bind(new ColorField(label) { value = (Color)val });
             if (type == typeof(Quaternion))
+            {
                 // Quaternion has no dedicated field — edit it as euler angles, same as
                 // the Transform inspector does.
-                return Bind(new Vector3Field(label) { value = ((Quaternion)val).eulerAngles },
-                    v => field.SetValue(instance, Quaternion.Euler(v)));
+                var euler = new Vector3Field(label) { value = ((Quaternion)val).eulerAngles };
+                euler.RegisterValueChangedCallback(evt => persist(Quaternion.Euler(evt.newValue)));
+                return euler;
+            }
 
             var unsupported = new Label($"{label}: unsupported type ({type.Name})");
             unsupported.SetEnabled(false);

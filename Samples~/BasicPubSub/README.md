@@ -1,7 +1,8 @@
 # Basic Pub/Sub Sample
 
 A tiny score-clicker built entirely on `Tutan.Messages` — it shows the two buses
-working together with nothing wired directly between the parts.
+working together: the models, the score HUD and the decay worker never reference
+each other.
 
 ## Before you run it
 
@@ -12,9 +13,17 @@ auto-spawned `[MessagesHost]`.
 
 **Requirements:** the sample UI uses uGUI (`com.unity.ugui`, installed by default
 in Unity 6 templates). It is render-pipeline agnostic (Built-in, URP, HDRP) and
-works with either input backend: at startup it adds the UI input module matching
-**Player ▸ Active Input Handling** (`InputSystemUIInputModule` for the Input System
-package, `StandaloneInputModule` for the legacy Input Manager).
+works with either input backend: at startup it adds a UI input module to match —
+`InputSystemUIInputModule` when **Player ▸ Active Input Handling** includes the
+Input System and the Input System package (`com.unity.inputsystem`) is installed,
+otherwise `StandaloneInputModule` for the legacy Input Manager. With **Input System
+Package (New)** selected but the package not installed, the buttons cannot respond
+and a warning in the Console says how to fix it.
+
+**Web players:** Web builds have no managed threads, so there `ScoreDecayWorker`
+enqueues its decay ticks from a coroutine on the main thread instead of a
+background thread. The game plays the same; `CommandBus.Enqueue` simply defers each
+tick to the next drain.
 
 ## Run it
 
@@ -34,7 +43,10 @@ package, `StandaloneInputModule` for the legacy Input Manager).
 
 ## How the pieces talk
 
-Nothing holds a reference to anything else — every interaction goes through a bus:
+The models, the score HUD and the decay worker never reference each other — every
+interaction between them goes through a bus. Only the composition root holds direct
+references: to what it builds (the models, and the decay worker it starts and stops)
+and to the two HUDs, to switch them and to hand the final score to the menu.
 
 - **`CommandBus` (N:1)** — `StartGame` → `MenuModel`; `AdjustScore` and `ResetScore`
   → `ScoreModel`. All three are bound at the composition root through a single

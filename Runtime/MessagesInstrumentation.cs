@@ -23,9 +23,10 @@ namespace Tutan.Messages
     /// appended to a thread-safe ring buffer that the Messages Console — or your
     /// own diagnostics via <see cref="Snapshot()"/> — can poll. The bus-side hooks
     /// are <c>[Conditional]</c> on <c>UNITY_EDITOR</c> / <c>TUTAN_MESSAGES_DEBUG</c>,
-    /// so in release player builds every hook call site is stripped; unless your
-    /// own code calls this API there, the type is never initialized and its ring
-    /// buffer is never allocated.
+    /// so in release player builds every hook call site is stripped and nothing is
+    /// recorded. The ring buffer is only allocated by the first recorded operation,
+    /// so a release player never allocates it — even if your own code sets
+    /// <see cref="Enabled"/> or polls <see cref="Snapshot()"/>.
     /// </summary>
     public static class MessagesInstrumentation
     {
@@ -150,21 +151,28 @@ namespace Tutan.Messages
         /// per frame from the main thread (the auto-host does this in LateUpdate).
         /// [Conditional] so the call — and the Time.frameCount read passed to it —
         /// is stripped from release player builds. This is also the only static
-        /// member the host touches, so stripping it means the type is never
-        /// initialized in release and the ring buffer below is never allocated.
+        /// member the host touches, so stripping it means the host never
+        /// initializes this type in release.
         /// </summary>
         [Conditional("UNITY_EDITOR"), Conditional("TUTAN_MESSAGES_DEBUG")]
         public static void SyncFrame(int frame) => CurrentFrame = frame;
 
         const int DefaultCapacity = 4096;
-        static Record[] s_buffer = new Record[DefaultCapacity];
+
+        // Allocated by the first Append, not by the type initializer: a release
+        // player strips every Record* call, so code that merely touches this API
+        // there (Enabled, Snapshot, Count, ...) never pays for ~256 KB of records
+        // that can never be written. Null until then, and again after
+        // SetCapacity; every access is under s_lock.
+        static Record[] s_buffer;
+        static int s_capacity = DefaultCapacity;
         static int s_head;       // next write index
-        static int s_count;      // current valid records (<= buffer.Length)
+        static int s_count;      // current valid records (<= s_capacity)
         static long s_totalEver; // monotonic, survives wraparound
         static readonly object s_lock = new object();
 
         /// <summary>Ring-buffer capacity, in records.</summary>
-        public static int Capacity => s_buffer.Length;
+        public static int Capacity { get { lock (s_lock) return s_capacity; } }
 
         /// <summary>Number of valid records currently in the ring buffer.</summary>
         public static int Count { get { lock (s_lock) return s_count; } }
@@ -176,13 +184,17 @@ namespace Tutan.Messages
         /// </summary>
         public static long TotalEver => Interlocked.Read(ref s_totalEver);
 
-        /// <summary>Resize the ring buffer, discarding all current records. Minimum 16.</summary>
+        /// <summary>
+        /// Resize the ring buffer, discarding all current records. Minimum 16. The
+        /// new buffer is allocated by the next recorded operation.
+        /// </summary>
         public static void SetCapacity(int capacity)
         {
             if (capacity < 16) capacity = 16;
             lock (s_lock)
             {
-                s_buffer = new Record[capacity];
+                s_capacity = capacity;
+                s_buffer = null;
                 s_head = 0;
                 s_count = 0;
             }
@@ -208,9 +220,14 @@ namespace Tutan.Messages
             {
                 totalEver = s_totalEver;
                 var list = new List<Record>(s_count);
-                int start = (s_head - s_count + s_buffer.Length) % s_buffer.Length;
-                for (int i = 0; i < s_count; i++)
-                    list.Add(s_buffer[(start + i) % s_buffer.Length]);
+                // s_count > 0 implies the buffer exists (only Append raises it).
+                if (s_count > 0)
+                {
+                    int length = s_buffer.Length;
+                    int start = (s_head - s_count + length) % length;
+                    for (int i = 0; i < s_count; i++)
+                        list.Add(s_buffer[(start + i) % length]);
+                }
                 return list;
             }
         }
@@ -222,7 +239,8 @@ namespace Tutan.Messages
             {
                 s_head = 0;
                 s_count = 0;
-                Array.Clear(s_buffer, 0, s_buffer.Length);
+                if (s_buffer != null)
+                    Array.Clear(s_buffer, 0, s_buffer.Length);
             }
         }
 
@@ -323,9 +341,10 @@ namespace Tutan.Messages
         {
             lock (s_lock)
             {
-                s_buffer[s_head] = record;
-                s_head = (s_head + 1) % s_buffer.Length;
-                if (s_count < s_buffer.Length) s_count++;
+                var buffer = s_buffer ??= new Record[s_capacity];
+                buffer[s_head] = record;
+                s_head = (s_head + 1) % buffer.Length;
+                if (s_count < buffer.Length) s_count++;
                 // Inside the lock so TotalEver can never run ahead of the buffer
                 // contents — the console's incremental catch-up pairs the two.
                 // Still Interlocked: TotalEver reads it without taking the lock.

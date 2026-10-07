@@ -146,4 +146,5 @@ This was created with the help of Assistant, a Unity Artificial Intelligence pro
 }
 
 /* Clickable script-file rows (.tutan-script-field*) are styled by the
-   ScriptFileField control's own stylesheet, Editor/ScriptFileField.uss. */
+   ScriptFileField control's own stylesheet,
+   Editor/VisualElements/ScriptField/ScriptFileField.uss. */

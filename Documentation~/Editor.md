@@ -1,14 +1,23 @@
-[Home](index) · [Why](Messages) · [API Reference](API-Reference) · [Examples](Examples) · [Threading](Threading) · [Performance](Performance) · [Edge Cases](EdgeCases) · [Architecture](Architecture) · [Bootstrap](Bootstrap) · **Editor**
+[Home](index.md) · [Why](Messages.md) · [API Reference](API-Reference.md) · [Examples](Examples.md) · [Threading](Threading.md) · [Performance](Performance.md) · [Edge Cases](EdgeCases.md) · [Architecture](Architecture.md) · [Bootstrap](Bootstrap.md) · **Editor**
 
 ---
 
 # Editor Tooling
 
-Everything on this page is **editor-only / development-only**. The
-instrumentation hooks are gated behind `[Conditional("UNITY_EDITOR")]` and
-`[Conditional("TUTAN_MESSAGES_DEBUG")]`, so the C# compiler strips every
-call site in release player builds. The inspector drawers live under
-`Editor/` and are never compiled into a player.
+This page covers two kinds of tooling:
+
+- **Editor-only:** the Messages Console window and the inspector drawers live
+  in the `Tutan.Messages.Editor` assembly under `Editor/` and are never
+  compiled into a player. The instrumentation hooks the Console reads are
+  gated behind `[Conditional("UNITY_EDITOR")]` and
+  `[Conditional("TUTAN_MESSAGES_DEBUG")]`, so the C# compiler strips every call
+  site in release player builds.
+- **Runtime types:** `EventReference` / `CommandReference`, the
+  `[EventType]` / `[CommandType]` attributes and `MessageTypeResolver` live in
+  the runtime assembly and work in player builds. They are meant for authoring
+  and tooling, not hot paths. The `MessagesInstrumentation` API is runtime too,
+  but it only records where the hooks are compiled in — see
+  [Programmatic access](#programmatic-access).
 
 ---
 
@@ -19,22 +28,29 @@ The package ships with an editor window for live introspection of bus traffic:
 
 It is a single virtualized log of recent `Subscribe`, `Unsubscribe`, `Publish`,
 `Enqueue`, and (optionally) drain operations with timestamp, frame, bus (E/C),
-op, and type. Selecting a row pretty-prints the payload,
-handler details, and — for `Publish`/`Enqueue` rows — the subscribers as they
-were **at the moment the message was sent** in the right pane. This subscriber
-list is a snapshot frozen into the record at fire time, not a live query, so
-subscribing or unsubscribing afterwards does not change what a past record
-shows.
+op, and type. A queued message appears twice: as an `Enqueue` row when it is
+sent, and as a `Publish` row when the drain dispatches it. Selecting a row
+pretty-prints the payload, handler details, and — for `Publish`/`Enqueue`
+rows — the subscribers as they were **at the moment the message was sent** in
+the right pane. This subscriber list is a snapshot frozen into the record at
+fire time, not a live query, so subscribing or unsubscribing afterwards does
+not change what a past record shows. The message type and each subscriber are
+clickable rows: click to ping the script, double-click to open it (a lambda
+handler resolves to the script of the class that declares it).
 
-Toolbar: **Pause** (freeze the view), **Clear** (empty the ring buffer),
-**Events / Commands** toggles, per-op toggles (**Publish / Enqueue /
-Subscribe·Unsubscribe / Drain**), and a search field that filters by full
-type name. Drain records are off by default because they are noisy.
+Toolbar: **Pause** (freeze the view; records keep arriving in the buffer),
+**Clear** (empty the ring buffer), **Auto-scroll** (keep the newest record in
+view), a search field that filters by full type name, and the filter toggles
+**Events** / **Commands** and **Publish** / **Enqueue** / **Subs**
+(Subscribe·Unsubscribe) / **Drains**. Drain records are off by default because
+they are noisy. Filter choices persist across domain reloads, and reopening the
+window lists the records still in the ring buffer.
 
-While the window is open, struct payloads are boxed into records so they can
-be inspected — this adds one boxing allocation per `Publish`/`Enqueue`. It is
-on automatically whenever the window is open and incurs no cost once the
-window is closed.
+While the window is open, every recorded `Publish`/`Enqueue` makes a few small
+allocations: the boxed payload, so it can be inspected, plus a snapshot of the
+subscribers. A drained queued message is recorded (and boxed) again as a
+`Publish`. Recording is on automatically whenever the window is open and costs
+nothing beyond a `bool` check once the window is closed.
 
 ### Runtime cost
 
@@ -48,10 +64,10 @@ The instrumentation hooks on `Messages.Publish` / `Enqueue` /
 so the C# compiler strips every call site at compile time when neither
 define is set. The per-frame frame-counter sync in `MessagesHost` goes
 through the same kind of `[Conditional]` method (`SyncFrame`), so it strips
-too. With every touchpoint gone, `MessagesInstrumentation`'s static
-constructor never runs in a release player, so its ~256 KB record ring
-buffer is never even allocated. **In release player builds the bus runs
-exactly as before — no branches, no allocations, no buffer.**
+too. The ~256 KB record ring buffer is only allocated by the first recorded
+operation, so it is never allocated in a release player. **In release player
+builds the bus runs exactly as before — no branches, no allocations, no
+buffer.**
 
 In the editor it is always available because `UNITY_EDITOR` is always
 defined. To compile the hooks into a **development build** (so QA can capture
@@ -85,16 +101,21 @@ foreach (var r in records)
 > plain toggle over the same `[Conditional]`-gated hooks described in **Runtime
 > cost**, above — so in a normal release player build, where neither
 > `UNITY_EDITOR` nor `TUTAN_MESSAGES_DEBUG` is defined, every `Record*` call
-> site is stripped and the ring buffer is never even allocated. There, setting
-> `Enabled = true` is a **silent no-op**: nothing is recorded and `Snapshot()`
-> stays empty. To use this API outside the editor you must build with
-> `TUTAN_MESSAGES_DEBUG` in the target platform's Scripting Define Symbols. It
-> is a development / QA capability — not something to flip on in a shipping
-> build.
+> site is stripped, so nothing is recorded and the ring buffer (allocated only
+> by the first recorded operation) is never allocated. There, setting
+> `Enabled = true` is a **silent no-op** and `Snapshot()` stays empty. To use
+> this API outside the editor you must build with `TUTAN_MESSAGES_DEBUG` in the
+> target platform's Scripting Define Symbols. It is a development / QA
+> capability — not something to flip on in a shipping build.
 
 Payload capture is not a separate switch: while `Enabled` is `true`, every
-`Publish`/`Enqueue` record carries the boxed payload (one boxing allocation
-per record); with `Enabled` false there is no cost at all.
+`Publish`/`Enqueue` record carries the boxed payload and a subscriber snapshot
+(a few small allocations per record); with `Enabled` false the hooks return
+after one `bool` check.
+
+If you drain the queues from your own loop instead of `MessagesHost`, call
+`MessagesInstrumentation.SyncFrame(Time.frameCount)` once per frame so records
+carry the right frame number — see [Bootstrap](Bootstrap.md#queue-draining-automatic).
 
 ---
 
@@ -140,10 +161,17 @@ IMGUI editor that draws the field with `EditorGUILayout.PropertyField`.
 In the Inspector you get a type dropdown, a native UI-Toolkit field editor
 for the struct's public fields, and a small **▶** button that synthesizes
 and publishes the message immediately — handy for poking subscribers without
-entering play mode logic. The struct's fields are enumerated by reflection,
-but each one is rendered with its matching UI-Toolkit control (e.g.
-`IntegerField`, `Vector3Field`, `EnumField`), consistent with the rest of the
-editor tooling.
+entering play mode logic. ▶ publishes a fresh copy of the stored reference,
+so a `Publish()` override on an `EventReference` / `CommandReference` subclass
+runs with that subclass's serialized fields, as at runtime. The struct's
+fields are enumerated by reflection, but each one is rendered with its matching
+UI-Toolkit control (e.g. `IntegerField`, `Vector3Field`, `EnumField`),
+consistent with the rest of the editor tooling. The drawers follow undo/redo,
+prefab reverts and edits made in other inspectors.
+
+With several objects selected, the type dropdown writes to all of them. The
+payload can be edited, and ▶ used, only while every selected object holds the
+same type and payload; otherwise a note replaces the payload editor.
 
 > **Mark referenced structs `[Serializable]`.** The payload round-trips
 > through `JsonUtility`, which only serializes plain structs that carry the
@@ -158,8 +186,8 @@ If you only need the *type* (not a payload), decorate a `string` field with
 `AssemblyQualifiedName`:
 
 ```csharp
-[EventType]   public string eventType;    // dropdown of all IEvent types
-[CommandType] public string commandType;  // dropdown of all ICommand types
+[EventType]   public string eventType;    // dropdown of all IEvent structs
+[CommandType] public string commandType;  // dropdown of all ICommand structs
 ```
 
 Resolve it at runtime with `MessageTypeResolver.Resolve(eventType)`:
@@ -177,7 +205,8 @@ the namespace-qualified name in every loaded assembly — the same resolution
 
 Only structs appear in the dropdown — the bus is constrained to
 `where T : struct`, so a class implementing `IEvent` / `ICommand` could never
-be published.
+be published. Open generic structs (e.g. `EntityChanged<T>`) are not listed
+either: without type arguments they can't be instantiated or published.
 
 ### Supported field types in the inline editor
 
@@ -197,10 +226,15 @@ The inline editor renders these field types with native UI-Toolkit controls:
 | `Color` | `ColorField` |
 | `Quaternion` | `Vector3Field` (edited as euler angles) |
 
-Other types fall back to a disabled "unsupported type" label — if you need
-them edited from the inspector, either add a case to
-`MessageReferenceDrawer.CreateFieldElement` or expose the struct through a
-`[Serializable]` wrapper instead.
+Only fields `JsonUtility` serializes can be authored. `readonly` and
+`[NonSerialized]` public fields are listed as disabled "not serialized" rows,
+because edits to them would never reach the stored JSON.
+
+Other types render as a disabled "unsupported type" label and keep their
+default/serialized value. To edit them, serialize the message struct as an
+ordinary field on your own MonoBehaviour (drawn by Unity's default inspector)
+and publish it from code, or embed the package (copy it into `Packages/`) to
+extend `MessageReferenceDrawer`.
 
 Every field is authored explicitly — including any field named `Timestamp`.
 The reference publishes exactly the values you enter; no field is populated

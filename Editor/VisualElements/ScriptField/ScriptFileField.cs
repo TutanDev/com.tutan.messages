@@ -13,6 +13,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
 using UnityEditor;
 using UnityEngine;
@@ -28,15 +29,22 @@ namespace Tutan.Messages.Editor
     [UxmlElement]
     public partial class ScriptFileField : VisualElement
     {
+        /// <summary>USS class added to the root element.</summary>
         public static readonly string ussClassName = "tutan-script-field";
+        /// <summary>USS class added to the script icon.</summary>
         public static readonly string iconUssClassName = ussClassName + "__icon";
+        /// <summary>USS class added to the type-name label.</summary>
         public static readonly string labelUssClassName = ussClassName + "__label";
+        /// <summary>USS class added to the root while no source file is found for the type.</summary>
         public static readonly string missingUssClassName = ussClassName + "--missing";
 
-        // Resolved from this source file's location (via [CallerFilePath]) so it
-        // survives the package being embedded or renamed. The .uss lives next to
-        // this .cs with a matching base name.
-        static readonly string UssPath = PathUtils.RelativePath(".uss");
+        // ScriptFileField.uss, loaded by GUID (from its .meta) because the package's
+        // asset path depends on how it was installed; the GUID does not.
+        const string UssGuid = "4b4dccc04c65413aa83d83b51a26ddd8";
+
+        // Only a successful load is kept: Unity's == null also catches a sheet
+        // destroyed by a reimport, so a miss is retried by the next row.
+        static StyleSheet s_uss;
 
         readonly Image _icon;
         readonly Label _label;
@@ -50,6 +58,10 @@ namespace Tutan.Messages.Editor
             set => _label.text = value;
         }
 
+        /// <summary>
+        /// Creates an empty row; call <see cref="SetType"/> or <see cref="SetTypeName"/>
+        /// to point it at a type.
+        /// </summary>
         public ScriptFileField()
         {
             AddToClassList(ussClassName);
@@ -73,8 +85,9 @@ namespace Tutan.Messages.Editor
 
             // The control carries its own stylesheet so every consumer renders
             // identically without copying USS into each window.
-            var uss = AssetDatabase.LoadAssetAtPath<StyleSheet>(UssPath);
-            if (uss != null) styleSheets.Add(uss);
+            if (s_uss == null)
+                s_uss = AssetDatabase.LoadAssetAtPath<StyleSheet>(AssetDatabase.GUIDToAssetPath(UssGuid));
+            if (s_uss != null) styleSheets.Add(s_uss);
 
             RegisterCallback<ClickEvent>(OnClick);
         }
@@ -139,16 +152,43 @@ namespace Tutan.Messages.Editor
         /// Find the <see cref="MonoScript"/> asset that declares <paramref name="type"/>.
         /// Works even when the file name differs from the type name (e.g. several
         /// message structs grouped in one file): a fast name-based match is tried
-        /// first, then a source-text scan for the declaration as a fallback.
+        /// first, then a source-text scan for the declaration as a fallback. For a
+        /// compiler-generated type (lambda closure, iterator, async state machine)
+        /// this returns the script of the type that encloses it.
         /// </summary>
         public static MonoScript FindScript(Type type)
         {
             if (type == null) return null;
             if (s_scriptCache.TryGetValue(type, out var cached)) return cached;
 
-            MonoScript found = FindByFileName(type) ?? FindBySource(type);
+            // Lambda handlers report compiler-generated nested types ("Hud+<>c",
+            // "Hud+<>c__DisplayClass3_0", "Hud+<Run>d__5"); their source is the
+            // enclosing type's file.
+            var declaring = type;
+            while (declaring.DeclaringType != null && IsCompilerGenerated(declaring))
+                declaring = declaring.DeclaringType;
+
+            // A name that can't be declared in C# can't match by file name or by
+            // the declaration regex, so skip the project-wide source scan.
+            MonoScript found = IsIdentifier(StripGenericArity(declaring.Name))
+                ? FindByFileName(declaring) ?? FindBySource(declaring)
+                : null;
             s_scriptCache[type] = found;
             return found;
+        }
+
+        static bool IsCompilerGenerated(Type type) =>
+            type.Name.StartsWith("<", StringComparison.Ordinal)
+            || type.IsDefined(typeof(CompilerGeneratedAttribute), false);
+
+        static bool IsIdentifier(string name)
+        {
+            if (string.IsNullOrEmpty(name) || char.IsDigit(name[0])) return false;
+            foreach (char c in name)
+            {
+                if (!char.IsLetterOrDigit(c) && c != '_') return false;
+            }
+            return true;
         }
 
         // Fast path: a file named after the type. GetClass() returns the type only

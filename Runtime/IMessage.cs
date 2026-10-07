@@ -19,14 +19,16 @@ namespace Tutan.Messages
     public interface IEvent : IMessage { }
 
     /// <summary>
-    /// Marker for command messages. Intent — exactly one handler.
+    /// Marker for command messages. Intent — at most one handler.
     /// Naming convention: imperative verb (MovePlayer, PlaceOrder).
     ///
     /// The single-handler rule is enforced by <see cref="CommandBus"/>, not by
     /// the core <see cref="MessageBus{TBase}"/>. Handlers are declared once at the
-    /// composition root via <see cref="CommandBus.Install"/>, which validates the
-    /// N:1 rule and reports a violation as a return value rather than throwing. Using
-    /// <c>MessageBus&lt;ICommand&gt;</c> directly allows multiple handlers per command type.
+    /// composition root via <see cref="CommandBus.Install"/>, which rejects a second
+    /// handler for the same command type and reports it as a return value rather
+    /// than throwing. A command type with no bound handler is not an error: sending
+    /// it is a silent no-op. Using <c>MessageBus&lt;ICommand&gt;</c> directly allows
+    /// multiple handlers per command type.
     /// </summary>
     public interface ICommand : IMessage { }
 }

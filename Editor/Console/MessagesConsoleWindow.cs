@@ -26,8 +26,11 @@ namespace Tutan.Messages.Editor
     /// </summary>
     public sealed class MessagesConsoleWindow : EditorWindow
     {
-        static readonly string UxmlPath = PathUtils.RelativePath(".uxml");
-        static readonly string UssPath = PathUtils.RelativePath(".uss");
+        // Loaded by GUID (from the .meta files next to them), not by path: the
+        // package's asset path depends on how it was installed (embedded,
+        // Library/PackageCache, a local file: path), its GUIDs do not.
+        const string UxmlGuid = "e9d14c8ade845e848aa5e9881cb7cbfb"; // MessagesConsoleWindow.uxml
+        const string UssGuid = "a4a10763f8ecdcf4c816abe8f713ba24";  // MessagesConsoleWindow.uss
 
         // Persisted filter preferences. Kept in EditorPrefs so the user's filter setup
         // survives domain reloads (notably entering Play mode) and window reopen.
@@ -90,17 +93,24 @@ namespace Tutan.Messages.Editor
             MessagesInstrumentation.Enabled = false;
         }
 
-        // CreateGUI runs on open AND after every domain reload — keep it idempotent
-        // (rebuild from scratch, restore state from EditorPrefs).
+        /// <summary>
+        /// Unity callback that builds the window's UI; runs on open and after every
+        /// domain reload.
+        /// </summary>
         public void CreateGUI()
         {
+            // Runs again after every reload, so keep it idempotent: rebuild from
+            // scratch and restore state from EditorPrefs.
             rootVisualElement.Clear();
 
-            var uxml = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(UxmlPath);
-            var uss = AssetDatabase.LoadAssetAtPath<StyleSheet>(UssPath);
+            var uxml = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(AssetDatabase.GUIDToAssetPath(UxmlGuid));
+            var uss = AssetDatabase.LoadAssetAtPath<StyleSheet>(AssetDatabase.GUIDToAssetPath(UssGuid));
             if (uxml == null)
             {
-                rootVisualElement.Add(new Label($"Could not load UXML at {UxmlPath}"));
+                rootVisualElement.Add(new HelpBox(
+                    $"Messages Console could not load its layout (MessagesConsoleWindow.uxml, GUID {UxmlGuid}). " +
+                    "Reimport the Tutan Messages package, then reopen this window.",
+                    HelpBoxMessageType.Error));
                 return;
             }
             uxml.CloneTree(rootVisualElement);
@@ -112,7 +122,11 @@ namespace Tutan.Messages.Editor
             BindLog();
 
             _statusLabel = rootVisualElement.Q<Label>("status-label");
-            UpdateStatus();
+
+            // Fill the log from what the ring buffer already holds: Tick only picks
+            // up records newer than the cursor, so a reopened window would otherwise
+            // list nothing until a filter was toggled.
+            FullRebuild();
         }
 
         // Restore persisted filter preferences into fields + instrumentation statics.
@@ -139,6 +153,7 @@ namespace Tutan.Messages.Editor
             {
                 MessagesInstrumentation.Clear();
                 _filtered.Clear();
+                ResetSelection();
                 _logList?.RefreshItems();
                 _lastTotalProcessed = MessagesInstrumentation.TotalEver;
                 UpdateStatus();
@@ -180,6 +195,7 @@ namespace Tutan.Messages.Editor
             // lock — a separate TotalEver/Count read pair can tear against
             // worker-thread appends and desync the incremental catch-up.
             _filtered.Clear();
+            ResetSelection();
             var snapshot = MessagesInstrumentation.Snapshot(out long totalEver);
             int count = snapshot.Count;
 
@@ -278,6 +294,27 @@ namespace Tutan.Messages.Editor
                     return;
                 }
             }
+            ClearDetail(); // deselected: don't leave the last record's details up
+        }
+
+        // ListView selection is index-based, and every rebuild, Clear, or trim
+        // re-indexes _filtered: a kept selection would highlight whichever record
+        // now sits at that index while the detail pane still shows the old one.
+        void ResetSelection()
+        {
+            _logList?.ClearSelection();
+            ClearDetail();
+        }
+
+        void ClearDetail()
+        {
+            if (_detailHeader == null) return; // UI not built
+            _detailHeader.text = "Select a row to inspect";
+            _detailBody.text = string.Empty;
+            _detailBody.style.display = DisplayStyle.None;
+            _detailTypeSection.Clear();
+            _detailPayloadSection.Clear();
+            _detailSubsSection.Clear();
         }
 
         // Render the message type and the captured subscribers as clickable
@@ -310,11 +347,6 @@ namespace Tutan.Messages.Editor
                 payloadLabel.AddToClassList("mb-detail-body");
                 _detailPayloadSection.Add(payloadLabel);
             }
-            else if (isFire)
-            {
-                _detailPayloadSection.Add(SectionHeader("Payload"));
-                _detailPayloadSection.Add(DimNote("(not captured — recorded before this window opened)"));
-            }
 
             if (!isFire) return;
 
@@ -322,11 +354,7 @@ namespace Tutan.Messages.Editor
             _detailSubsSection.Add(SectionHeader($"Subscribers (at {when} time)"));
 
             var subs = r.Subscribers;
-            if (subs == null)
-            {
-                _detailSubsSection.Add(DimNote("(not captured)"));
-            }
-            else if (subs.Length == 0)
+            if (subs == null || subs.Length == 0)
             {
                 _detailSubsSection.Add(DimNote("(none)"));
             }
@@ -414,7 +442,18 @@ namespace Tutan.Messages.Editor
             // then drop the entire overflow in one RemoveRange (a single shift).
             const int TrimMargin = 128;
             if (_filtered.Count > capacity + TrimMargin)
-                _filtered.RemoveRange(0, _filtered.Count - capacity);
+            {
+                int trimmed = _filtered.Count - capacity;
+                _filtered.RemoveRange(0, trimmed);
+
+                // Selection is by index: move it with its record, or drop it if
+                // the record was trimmed away.
+                int selected = _logList.selectedIndex;
+                if (selected >= trimmed)
+                    _logList.SetSelectionWithoutNotify(new[] { selected - trimmed });
+                else if (selected >= 0)
+                    ResetSelection();
+            }
 
             _lastTotalProcessed = totalEver;
         }

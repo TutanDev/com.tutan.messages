@@ -97,6 +97,22 @@ namespace Tutan.Messages.Tests
 
             Assert.AreEqual(0, callCount);
         }
+
+        [Test]
+        public void Install_DiscardsCommandsQueuedBeforeIt_AndWarns()
+        {
+            // Install swaps in a fresh bus, so a command enqueued before it — even
+            // before the first install — is dropped. The editor says so.
+            CommandBus.Enqueue(new MovePlayer { Value = 7 });
+
+            int received = -1;
+            LogAssert.Expect(LogType.Warning,
+                new Regex(@"CommandBus\.Install discarded queued commands.*\(MovePlayer\)"));
+            CommandBus.Install(r => r.Handle<MovePlayer>((ref MovePlayer m) => received = m.Value));
+            CommandBus.DrainQueues();
+
+            Assert.AreEqual(-1, received);
+        }
     }
 
     // ── EventBusTests ─────────────────────────────────────────────────────
@@ -207,17 +223,20 @@ namespace Tutan.Messages.Tests
     {
         struct ConcurrentMsg : IEvent { public int Value; }
 
+        // Fresh channel types for the first-use race below.
+        struct SharedA : IEvent { }
+        struct SharedB : IEvent { }
+        struct WorkerOnlyC : IEvent { }
+        struct WorkerOnlyD : IEvent { }
+
         [SetUp]    public void SetUp()    => EventBus.Reset();
         [TearDown] public void TearDown() => EventBus.Reset();
 
         [Test]
-        public void Enqueue_FromWorkerThread_RacingWithMainSubscribe_DoesNotCorruptDictionary()
+        public void Enqueue_FromWorkerThread_WhileMainDrains_DeliversAll()
         {
-            // Regression: pre-1.3, Subscribe used a lock-free path while
-            // Enqueue mutated _channels under a lock. Concurrent first-time
-            // use of new channel types could corrupt the Dictionary.
-            // ConcurrentDictionary now makes this safe.
-
+            // A worker streams into an existing channel while the main thread keeps
+            // draining it: every message arrives exactly once.
             const int iterations = 5000;
             int received = 0;
             EventBus.Subscribe<ConcurrentMsg>((ref ConcurrentMsg m) => Interlocked.Increment(ref received));
@@ -237,9 +256,51 @@ namespace Tutan.Messages.Tests
         }
 
         [Test]
+        public void NewChannels_CreatedByWorkerAndMainAtOnce_LoseNothing()
+        {
+            // Regression: pre-0.3.0, channel storage was a plain Dictionary, which a
+            // worker-thread Enqueue could grow while a main-thread call used it. Here
+            // the worker's first Enqueue of each type races the main thread creating
+            // the same channels (Subscribe) and rebuilding its drain list
+            // (DrainQueues). Every interleaving has one correct outcome, so the
+            // assertions hold however the threads are scheduled.
+            const int rounds = 200;
+
+            for (int round = 0; round < rounds; round++)
+            {
+                EventBus.Reset();
+                int a = 0, b = 0;
+
+                using var barrier = new Barrier(2);
+                var worker = Task.Run(() =>
+                {
+                    barrier.SignalAndWait();
+                    EventBus.Enqueue(new WorkerOnlyC());
+                    EventBus.Enqueue(new SharedA());
+                    EventBus.Enqueue(new WorkerOnlyD());
+                    EventBus.Enqueue(new SharedB());
+                });
+
+                barrier.SignalAndWait();
+                // Both handlers exist before the first drain, so no message can be
+                // drained before its handler is subscribed.
+                EventBus.Subscribe<SharedB>((ref SharedB m) => b++);
+                EventBus.Subscribe<SharedA>((ref SharedA m) => a++);
+                while (!worker.IsCompleted)
+                    EventBus.DrainQueues();
+                worker.Wait();
+                EventBus.DrainQueues(); // final flush
+
+                Assert.AreEqual(4, EventBus.ChannelCount, $"Round {round}: a channel was lost or duplicated.");
+                Assert.AreEqual(1, a, $"Round {round}: SharedA was lost or delivered twice.");
+                Assert.AreEqual(1, b, $"Round {round}: SharedB was lost or delivered twice.");
+            }
+        }
+
+        [Test]
         public void Enqueue_FirstUseOfChannel_FromManyThreadsAtOnce_DropsNoMessages()
         {
-            // Regression: pre-0.14, the per-channel queue was lazily created with
+            // Regression: pre-0.14.0, the per-channel queue was lazily created with
             // a non-atomic `??=`. Threads racing on the FIRST Enqueue of a type
             // could each create a queue, losing the loser's message. The race only
             // exists at channel-queue birth, so reset and re-race many times.

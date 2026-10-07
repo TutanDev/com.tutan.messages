@@ -43,6 +43,10 @@ namespace Tutan.Messages
             string fullName = StripAssemblyName(typeName);
             if (fullName.Length == 0) return null;
 
+            // AppDomain.GetAssemblies is deliberate: on the 6000.3 minimum it is the
+            // only public loaded-assembly API (Unity's CurrentAssemblies wrapper is
+            // internal there). Newer editors' code-reload analyzer flags it
+            // (UAC0005/UAC0006), but only for embedded or local copies of the package.
             foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
             {
                 try

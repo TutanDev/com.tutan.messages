@@ -10,7 +10,11 @@ namespace Tutan.Messages
     /// want to own the drain loop yourself — attach <see cref="MessagesHost"/> to a
     /// persistent GameObject, or call <see cref="CommandBus.DrainQueues"/> /
     /// <see cref="EventBus.DrainQueues"/> from your own update logic (a PlayerLoop
-    /// callback, a manager, etc.).
+    /// callback, a manager, etc.). A custom drain loop should also call
+    /// <see cref="MessagesInstrumentation.SyncFrame"/>(<c>Time.frameCount</c>) once per
+    /// frame on the main thread, as <see cref="MessagesHost"/> does, so instrumentation
+    /// records carry the frame number; the call is <c>[Conditional]</c> and strips
+    /// from release builds.
     ///
     /// Command handlers are <b>not</b> wired here. Bind each command's single handler
     /// at your composition root through <see cref="CommandBus.Install"/>.

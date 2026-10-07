@@ -1,4 +1,4 @@
-[Home](index) · [Why](Messages) · [API Reference](API-Reference) · [Examples](Examples) · [Threading](Threading) · [Performance](Performance) · **Edge Cases** · [Architecture](Architecture) · [Bootstrap](Bootstrap) · [Editor](Editor)
+[Home](index.md) · [Why](Messages.md) · [API Reference](API-Reference.md) · [Examples](Examples.md) · [Threading](Threading.md) · [Performance](Performance.md) · **Edge Cases** · [Architecture](Architecture.md) · [Bootstrap](Bootstrap.md) · [Editor](Editor.md)
 
 ---
 
@@ -31,17 +31,21 @@ will receive subsequent messages.
 ## Unsubscribe During Dispatch
 
 Disposing a `Subscription` from inside a handler is safe. The entry is marked
-inactive immediately. The delegate reference is set to `null` to release the
-GC root. The inactive entry is skipped for the remainder of the current
-dispatch. Compaction occurs after dispatch completes.
+inactive immediately, and its delegate reference is set to `null` so the
+handler (and anything its closure captures) can be collected. The inactive
+entry is skipped for the remainder of the current dispatch. Compaction occurs
+after dispatch completes.
 
 ## Enqueue During Drain
 
 `DrainQueue` is bounded by the number of messages pending when the drain
 started. A handler that enqueues a message of the *same* type during dispatch
 therefore extends the **next** frame's drain, not the current one — a
-self-perpetuating handler (one that enqueues on every receipt) degrades to one
-message per frame instead of hanging the frame in an infinite drain loop.
+self-perpetuating handler (one that enqueues on every receipt) carries the same
+backlog from frame to frame, drained once per frame, instead of hanging the
+frame in an infinite drain loop. A handler that calls `DrainQueues` itself can
+pull some of those new messages into the current frame; the work per frame
+stays bounded.
 
 ## Handler Exceptions
 
@@ -49,10 +53,16 @@ Exceptions in a handler are caught and logged via `Debug.LogException`.
 Dispatch continues to the next handler. A broken handler must never cascade
 into a broken frame.
 
-## Zero Subscribers
+## No Channel
 
-`Publish<T>` returns immediately if no channel exists for `T`. Cost: one
-lock-free `ConcurrentDictionary.TryGetValue` call.
+`Publish<T>` returns immediately if no channel exists for `T` — nothing has
+subscribed to or enqueued `T` since the last reset. Cost: one lock-free
+`ConcurrentDictionary.TryGetValue` call.
+
+A channel outlives its subscribers: once every subscription to `T` is disposed
+(or after `T` was only ever enqueued), `Publish<T>` still finds the channel and
+walks its entry list, skipping inactive entries, inside the `Messages.Publish`
+profiler marker. It stays allocation-free.
 
 ## `AddTo(gameObject)` on a Never-Activated GameObject
 
@@ -75,7 +85,30 @@ between play sessions when Domain Reload is disabled. Consequences:
 - Unity does not order `SubsystemRegistration` callbacks across types, so a
   `Subscribe`/`Install` from *your own* `SubsystemRegistration` callback may run
   before or after the reset. Subscribe and install at `BeforeSceneLoad` or later
-  (`Awake` of a bootstrap object is the usual place).
+  (`Awake` of a bootstrap object is the usual place for subscriptions; see
+  below for when to install commands).
+
+## Queued Commands and `CommandBus.Install`
+
+A successful `CommandBus.Install`, like `Reset`, replaces the bus, so commands
+still queued for the next drain are discarded rather than dispatched — including
+on the first install. A command enqueued from another object's `Awake` (whose
+order relative to your installer's `Awake` is undefined) or from a worker
+thread that started early is lost. The editor and development builds log a
+warning naming the discarded types. Install before anything enqueues: from a
+`BeforeSceneLoad` `[RuntimeInitializeOnLoadMethod]`, or from a bootstrap object
+with an early Script Execution Order. Before a deliberate re-install, call
+`CommandBus.DrainQueues()` first if the queued commands matter. Do not install
+from inside a command handler: the drain in progress still delivers the rest of
+that command type's backlog to the replaced handler, and only the other types'
+queues are discarded.
+
+## Unbound Commands
+
+`Install` rejects a second handler for a command type but does not require one.
+Publishing or enqueuing a command that has no handler is a silent no-op. For
+commands that must be handled, assert `CommandBus.GetSubscriberCount<T>() == 1`
+once after `Install`.
 
 ## Subscriptions After `Reset()`
 

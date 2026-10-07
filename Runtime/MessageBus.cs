@@ -37,14 +37,21 @@ namespace Tutan.Messages
         static int s_mainThreadId = -1;
 
         // SubsystemRegistration always runs on the main thread, before user code.
+        // In the editor, InitializeOnLoadMethod also captures it after every domain
+        // reload (also main thread), so edit-mode callers — EditMode tests,
+        // [ExecuteAlways] scripts, editor tools — are checked too, not only after
+        // Play Mode has been entered once.
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+#if UNITY_EDITOR
+        [UnityEditor.InitializeOnLoadMethod]
+#endif
         static void Capture() => s_mainThreadId = Thread.CurrentThread.ManagedThreadId;
 
         [System.Diagnostics.Conditional("UNITY_EDITOR"), System.Diagnostics.Conditional("DEVELOPMENT_BUILD")]
         public static void AssertMainThread(string operation)
         {
-            // -1 = not captured yet (edit mode, before the first play). Skip the
-            // check rather than guess which thread is "main".
+            // -1 = not captured yet (a call made before the capture callbacks
+            // run). Skip the check rather than guess which thread is "main".
             if (s_mainThreadId == -1 || Thread.CurrentThread.ManagedThreadId == s_mainThreadId)
                 return;
 
@@ -65,6 +72,10 @@ namespace Tutan.Messages
         public abstract int SubscriberCount { get; }
         public abstract bool RemoveEntry(int tokenId);
         internal abstract IEnumerable<(int TokenId, Delegate Handler)> EnumerateEntries();
+
+        // True while queued messages await the next drain. Thread-safe, O(1).
+        // Diagnostics only (CommandBus.Install's discarded-queue warning).
+        public abstract bool HasPending { get; }
 
         // Non-generic dispatch seam for the editor synthetic-publish path, where
         // the message type is only known at runtime. Lets the bus avoid
@@ -93,12 +104,31 @@ namespace Tutan.Messages
         // Queue for deferred dispatch — allocated on first Enqueue call.
         ConcurrentQueue<T> _pendingQueue;
 
+        // Drain budget bookkeeping, used instead of ConcurrentQueue.Count: with more
+        // than two segments, Count freezes them for observation, so the next Enqueue
+        // starts a fresh 32-slot segment, and a steady queued stream would allocate
+        // on every drain. _enqueued is bumped (any thread) only after the message
+        // is in the queue; _dequeued is main-thread only. Their difference never
+        // exceeds what the queue holds; an increment that lands late is drained a
+        // frame later.
+        int _enqueued;
+        int _dequeued;
+
         // Re-entrancy depth. >0 means we are inside at least one Publish call.
         // CompactIfNeeded is deferred until depth returns to 0 so that outer
         // dispatch iterations are never invalidated by list mutations.
         int _dispatchDepth;
 
         public override int SubscriberCount => _activeCount;
+
+        public override bool HasPending
+        {
+            get
+            {
+                var queue = Volatile.Read(ref _pendingQueue);
+                return queue != null && !queue.IsEmpty;
+            }
+        }
 
         public void Publish(ref T message)
         {
@@ -157,24 +187,33 @@ namespace Tutan.Messages
                 queue = Interlocked.CompareExchange(ref _pendingQueue, fresh, null) ?? fresh;
             }
             queue.Enqueue(message);
+            // After the Enqueue, never before: the drain budget must not count a
+            // message that is not in the queue yet.
+            Interlocked.Increment(ref _enqueued);
         }
 
         public override void DrainQueue(MessagesInstrumentation.BusKind kind)
         {
             // Volatile so a queue created by a worker thread is visible here at
-            // the latest one frame after its first Enqueue. IsEmpty is the O(1)
-            // fast path; Count snapshots across segments and spins, so it is
-            // only paid when there is actually something to drain.
+            // the latest one frame after its first Enqueue. IsEmpty is the O(1),
+            // allocation-free fast path for the common nothing-queued case.
             var queue = Volatile.Read(ref _pendingQueue);
             if (queue == null || queue.IsEmpty) return;
 
-            // Bound the drain to the backlog present when it started. A handler
-            // that enqueues the same message type during dispatch extends the
-            // *next* frame's drain instead of this one — an unbounded loop here
-            // would let a self-perpetuating handler hang the frame forever.
-            int budget = queue.Count;
+            // Bound the drain to the backlog present when this call started — an
+            // unbounded loop would let a handler that enqueues its own type on
+            // every receipt hang the frame forever. What it enqueues waits for the
+            // next frame's drain, unless a handler drains re-entrantly: the nested
+            // call may consume part of this backlog, and this loop's leftover
+            // budget then picks up messages enqueued meanwhile — still bounded.
+            // unchecked: both counters may wrap; the difference stays correct.
+            int budget = unchecked(Volatile.Read(ref _enqueued) - _dequeued);
             while (budget-- > 0 && queue.TryDequeue(out var msg))
             {
+                // Before dispatch, so a handler that drains re-entrantly sees
+                // this message as already consumed.
+                _dequeued = unchecked(_dequeued + 1);
+
                 // A drained message is being dispatched now, so record it as a
                 // Publish — immediate Publish records in MessageBus.Publish, but
                 // that path is bypassed here, so the dispatch would otherwise be
@@ -246,7 +285,8 @@ namespace Tutan.Messages
 
     /// <summary>
     /// Generic message bus parameterized by message base type (ICommand or IEvent).
-    /// Subclasses own their singletons and may add bus-specific rules.
+    /// Wrapped by the static <see cref="EventBus"/>/<see cref="CommandBus"/> facades,
+    /// which own the singleton instances and add bus-specific rules.
     ///
     /// Thread safety: Publish(), Subscribe(), Subscription.Dispose(), and DrainQueues()
     /// are main-thread only. Enqueue() is thread-safe and may race with any
@@ -295,9 +335,14 @@ namespace Tutan.Messages
         /// Create a standalone bus instance. The static <see cref="EventBus"/> /
         /// <see cref="CommandBus"/> facades cover the common case; construct one
         /// directly only when you need an isolated bus (e.g. per test fixture or
-        /// per subsystem).
+        /// per subsystem). Its instrumentation records are tagged
+        /// <see cref="MessagesInstrumentation.BusKind.Command"/> when
+        /// <typeparamref name="TBase"/> is or derives from <see cref="ICommand"/>,
+        /// <see cref="MessagesInstrumentation.BusKind.Event"/> otherwise.
         /// </summary>
-        public MessageBus() : this(MessagesInstrumentation.BusKind.Event) { }
+        public MessageBus() : this(typeof(ICommand).IsAssignableFrom(typeof(TBase))
+            ? MessagesInstrumentation.BusKind.Command
+            : MessagesInstrumentation.BusKind.Event) { }
 
         internal MessageBus(MessagesInstrumentation.BusKind kind)
         {
@@ -463,6 +508,24 @@ namespace Tutan.Messages
         public int ChannelCount => _channels.Count;
 
         /// <summary>
+        /// Names of the message types whose queues still hold undrained messages,
+        /// comma-separated, or null when every queue is empty. Diagnostics for the
+        /// static facades' bus swap — allocates; never call it per frame.
+        /// </summary>
+        internal string DescribePendingQueues()
+        {
+            System.Text.StringBuilder names = null;
+            foreach (var kvp in _channels)
+            {
+                if (!kvp.Value.HasPending) continue;
+                if (names == null) names = new System.Text.StringBuilder();
+                else names.Append(", ");
+                names.Append(kvp.Key.Name);
+            }
+            return names?.ToString();
+        }
+
+        /// <summary>
         /// Walk all active subscriptions. Editor-only diagnostic — allocates
         /// per call. Not part of the public API.
         /// </summary>
@@ -496,6 +559,11 @@ namespace Tutan.Messages
             GC.SuppressFinalize(this);
         }
 
+        /// <summary>
+        /// Standard dispose pattern: override to release subclass state, and call
+        /// the base implementation.
+        /// </summary>
+        /// <param name="disposing">True when called from <see cref="Dispose()"/>.</param>
         protected virtual void Dispose(bool disposing)
         {
             if (_disposed) return;

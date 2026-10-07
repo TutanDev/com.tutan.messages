@@ -1,4 +1,4 @@
-# Messages — Zero-Alloc Pub/Sub for Unity
+# Tutan Messages — Zero-Alloc Pub/Sub for Unity
 
 A struct-based, ref-passed message bus designed for Unity 6 and XR frame
 budgets. Drop it in, publish events, and dispatch never allocates.
@@ -76,10 +76,23 @@ configure.
   `TUTAN_MESSAGES_NO_AUTO_HOST` to opt out and own the drain loop yourself.
   Command handlers are bound explicitly at your composition root via
   `CommandBus.Install`.
-- **Unity 6.1 (6000.1) and newer.** Pure C#, no package dependencies, any
-  render pipeline. Works on Windows, Mac, Linux, iOS, Android, WebGL, and XR
-  platforms (Quest, PCVR, visionOS). On WebGL there are no worker threads, so
-  `Enqueue` is simply a deferred same-thread dispatch.
+- **Unity 6000.3 LTS and newer.** Pure C#, no native plugins, any render
+  pipeline. Works on Windows, Mac, Linux, iOS, Android, Web, and XR platforms
+  (Quest, PCVR, visionOS). On Web there are no worker threads, so `Enqueue` is
+  simply a deferred same-thread dispatch.
+
+## Requirements
+
+- Unity 6000.3 LTS or newer.
+- The built-in **JSONSerialize** module (`com.unity.modules.jsonserialize`),
+  enabled by default: the runtime uses `JsonUtility` for `EventReference` /
+  `CommandReference` payloads. The Test Framework dependency below keeps it
+  enabled.
+- The **Test Framework** (`com.unity.test-framework`, part of Unity's default
+  project templates) and its NUnit package (`com.unity.ext.nunit`) are declared
+  dependencies because the package ships its EditMode tests. The tests compile
+  only when the package is listed in your project's `testables`.
+- The sample additionally needs uGUI (`com.unity.ugui`).
 
 ## Samples
 
@@ -89,17 +102,23 @@ One sample included, importable from the Package Manager:
   publishes commands, a background thread enqueues commands off the main thread, and
   the score UI listens for events. Covers the CommandBus (N:1), the EventBus (N:M),
   composition-root handler binding via `CommandBus.Install`, and thread-safe
-  `Enqueue`/drain in one place. Import the sample, open its scene, and press
-  Play — no configuration needed. Requires uGUI (`com.unity.ugui`, present by
-  default); works with any render pipeline and either input backend.
+  `Enqueue`/drain in one place. Import the sample (**Package Manager ▸ Tutan
+  Messages ▸ Samples**), open its scene, and press Play — no configuration
+  needed. Requires uGUI (`com.unity.ugui`, present by default); works with any
+  render pipeline and either input backend (the Input System UI module is used
+  when Active Input Handling includes the Input System and
+  `com.unity.inputsystem` is installed). On Web players the background
+  thread is replaced by a coroutine.
 
 ## Full documentation
 
-See [`Documentation~/index.md`](Documentation~/index.md) for the complete documentation site —
-API reference, threading model, performance characteristics, edge-case
-behavior, architectural guidance, and editor tooling.
+See [`Documentation~/index.md`](Documentation~/index.md) for the complete
+documentation, shipped inside the package — API reference, threading model,
+performance characteristics, edge-case behavior, architectural guidance, and
+editor tooling.
 
 ## Support
 
-- Issues and questions: <https://github.com/TutanDev>
-- Contact: andrespino.95@gmail.com
+Questions, bug reports and feature requests: email
+[andrespino.95@gmail.com](mailto:andrespino.95@gmail.com). Please include your
+Unity version and the package version (shown in Package Manager).

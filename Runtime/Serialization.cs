@@ -4,8 +4,8 @@ using UnityEngine;
 namespace Tutan.Messages
 {
     /// <summary>
-    /// Decorate a <c>string</c> field to show a dropdown of all concrete
-    /// <see cref="IEvent"/> types in the inspector. The field stores the selected
+    /// Decorate a <c>string</c> field to show a dropdown of all
+    /// <see cref="IEvent"/> structs in the inspector. The field stores the selected
     /// type's <c>AssemblyQualifiedName</c>; resolve it with
     /// <see cref="MessageTypeResolver.Resolve"/>. Prefer that over a bare
     /// <c>Type.GetType(field)</c>, which returns null once the type's assembly has
@@ -19,8 +19,8 @@ namespace Tutan.Messages
     }
 
     /// <summary>
-    /// Decorate a <c>string</c> field to show a dropdown of all concrete
-    /// <see cref="ICommand"/> types in the inspector. The field stores the selected
+    /// Decorate a <c>string</c> field to show a dropdown of all
+    /// <see cref="ICommand"/> structs in the inspector. The field stores the selected
     /// type's <c>AssemblyQualifiedName</c>; resolve it with
     /// <see cref="MessageTypeResolver.Resolve"/>. Prefer that over a bare
     /// <c>Type.GetType(field)</c>, which returns null once the type's assembly has
