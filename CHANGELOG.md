@@ -75,6 +75,11 @@ changes are listed below. Entries below 1.0.0 are the pre-release history.
   `Enqueue` started a new segment. The budget now comes from enqueue/dequeue counters,
   and a steady or bursty queued stream settles to zero allocation after warm-up. A
   handler that enqueues its own type is still drained on the next frame.
+- **A handler that enqueued its own type and then called `DrainQueues` overflowed the
+  stack.** Each nested drain started with a fresh budget of one and recursed once per
+  message. A `DrainQueues` call made from inside a handler now skips the channel that
+  is already draining (other message types still drain), so the per-drain bound holds
+  under re-entrancy.
 - **`new MessageBus<ICommand>()` recorded its traffic as `Event`.** A standalone bus now
   tags its instrumentation records `Command` when `TBase` is or derives from
   `ICommand`, `Event` otherwise.
@@ -109,8 +114,9 @@ changes are listed below. Entries below 1.0.0 are the pre-release history.
   change from outside the drawer; a field edit applies to the payload as currently
   stored.
 - **Multi-object editing no longer overwrites other objects' payloads.** When the
-  selected objects have different types or payloads, the type dropdown shows a mixed
-  value, the payload editor is replaced by a note, and ▶ is disabled.
+  selected objects have different types, the type dropdown shows a mixed value; when
+  they differ in type or payload, the payload editor is replaced by a note and ▶ is
+  disabled.
 - **`EventReference` / `CommandReference` arrays and lists lost their category in the
   inspector.** The drawer classified the field by `fieldInfo.FieldType`, which for
   `EventReference[]` / `List<CommandReference>` is the collection type: the dropdown
@@ -130,7 +136,11 @@ changes are listed below. Entries below 1.0.0 are the pre-release history.
   used the dark-skin icon in the light skin).
 - **Messages Console:**
   - the highlighted row and the detail pane no longer drift apart after a filter
-    change, Clear, or log trim;
+    change, Clear, log trim, or domain reload (the log list no longer restores a stale
+    selection from view data);
+  - after `MessagesInstrumentation.Clear()` (e.g. from the package's own tests) the
+    window no longer re-snapshots and repaints on every editor tick until the next
+    record arrives;
   - reopening the window lists the records already in the buffer;
   - subscriber rows for lambda/closure handlers resolve to the enclosing script
     (`ScriptFileField.FindScript` maps compiler-generated types to their declaring

@@ -92,6 +92,30 @@ namespace Tutan.Messages.Tests
         }
 
         [Test]
+        public void HandlerThatEnqueuesAndDrains_DoesNotRecurse()
+        {
+            // Without the re-entrancy guard every nested DrainQueues started a fresh
+            // budget of one and recursed once per message until the stack overflowed.
+            // The cap turns such a regression into a failed assertion, not a crash.
+            const int runawayCap = 64;
+            int dispatched = 0;
+            EventBus.Subscribe<Ping>((ref Ping m) =>
+            {
+                if (++dispatched >= runawayCap) return;
+                EventBus.Enqueue(new Ping());
+                EventBus.DrainQueues();
+            });
+
+            EventBus.Enqueue(new Ping());
+            EventBus.DrainQueues();
+            Assert.AreEqual(1, dispatched, "The nested DrainQueues must skip the channel being drained.");
+
+            // What the handler enqueued is drained by the next call, one per call.
+            EventBus.DrainQueues();
+            Assert.AreEqual(2, dispatched);
+        }
+
+        [Test]
         public void EnqueueDrain_SteadyStream_DoesNotAllocateAfterWarmUp()
         {
             long sum = 0;

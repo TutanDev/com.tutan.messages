@@ -25,7 +25,7 @@
             <ui:VisualElement name="log-panel" class="mb-panel">
                 <ui:TwoPaneSplitView view-data-key="tutan-mb-split" fixed-pane-initial-dimension="350" orientation="Horizontal">
                     <ui:VisualElement class="mb-log-list-wrap">
-                        <ui:ListView name="log-list" view-data-key="tutan-mb-log-list" fixed-item-height="20" show-alternating-row-backgrounds="ContentOnly" selection-type="Single" />
+                        <ui:ListView name="log-list" fixed-item-height="20" show-alternating-row-backgrounds="ContentOnly" selection-type="Single" />
                     </ui:VisualElement>
                     <ui:VisualElement class="mb-detail-wrap">
                         <ui:Label name="detail-header" text="Select a row to inspect" class="mb-detail-header" />

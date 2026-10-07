@@ -43,9 +43,10 @@ started. A handler that enqueues a message of the *same* type during dispatch
 therefore extends the **next** frame's drain, not the current one — a
 self-perpetuating handler (one that enqueues on every receipt) carries the same
 backlog from frame to frame, drained once per frame, instead of hanging the
-frame in an infinite drain loop. A handler that calls `DrainQueues` itself can
-pull some of those new messages into the current frame; the work per frame
-stays bounded.
+frame in an infinite drain loop. A handler that calls `DrainQueues` itself
+does not start a nested drain of the channel already being drained — that
+channel is skipped and the call drains the other message types — so
+re-entrancy cannot extend the bound or recurse.
 
 ## Handler Exceptions
 

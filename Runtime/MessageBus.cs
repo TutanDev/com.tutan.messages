@@ -114,6 +114,12 @@ namespace Tutan.Messages
         int _enqueued;
         int _dequeued;
 
+        // True while DrainQueue runs on this channel (main thread only). A handler
+        // that calls DrainQueues again would otherwise start a nested drain of this
+        // same channel with a fresh budget; one that also enqueues its own type
+        // would recurse once per message until the stack overflows.
+        bool _draining;
+
         // Re-entrancy depth. >0 means we are inside at least one Publish call.
         // CompactIfNeeded is deferred until depth returns to 0 so that outer
         // dispatch iterations are never invalidated by list mutations.
@@ -198,29 +204,37 @@ namespace Tutan.Messages
             // the latest one frame after its first Enqueue. IsEmpty is the O(1),
             // allocation-free fast path for the common nothing-queued case.
             var queue = Volatile.Read(ref _pendingQueue);
-            if (queue == null || queue.IsEmpty) return;
+            if (queue == null || queue.IsEmpty || _draining) return;
 
             // Bound the drain to the backlog present when this call started — an
             // unbounded loop would let a handler that enqueues its own type on
             // every receipt hang the frame forever. What it enqueues waits for the
-            // next frame's drain, unless a handler drains re-entrantly: the nested
-            // call may consume part of this backlog, and this loop's leftover
-            // budget then picks up messages enqueued meanwhile — still bounded.
+            // next drain. A DrainQueues call made from inside a handler skips this
+            // channel (_draining) and drains the others, so re-entrancy cannot
+            // extend the bound either.
             // unchecked: both counters may wrap; the difference stays correct.
             int budget = unchecked(Volatile.Read(ref _enqueued) - _dequeued);
-            while (budget-- > 0 && queue.TryDequeue(out var msg))
+            _draining = true;
+            try
             {
-                // Before dispatch, so a handler that drains re-entrantly sees
-                // this message as already consumed.
-                _dequeued = unchecked(_dequeued + 1);
+                while (budget-- > 0 && queue.TryDequeue(out var msg))
+                {
+                    _dequeued = unchecked(_dequeued + 1);
 
-                // A drained message is being dispatched now, so record it as a
-                // Publish — immediate Publish records in MessageBus.Publish, but
-                // that path is bypassed here, so the dispatch would otherwise be
-                // invisible to the Messages Console. [Conditional]-stripped in
-                // release, same as every other Record* call.
-                MessagesInstrumentation.RecordPublish(kind, ref msg, this);
-                Publish(ref msg);
+                    // A drained message is being dispatched now, so record it as a
+                    // Publish — immediate Publish records in MessageBus.Publish, but
+                    // that path is bypassed here, so the dispatch would otherwise be
+                    // invisible to the Messages Console. [Conditional]-stripped in
+                    // release, same as every other Record* call.
+                    MessagesInstrumentation.RecordPublish(kind, ref msg, this);
+                    Publish(ref msg);
+                }
+            }
+            finally
+            {
+                // finally: same reason as _dispatchDepth in Publish — an escaping
+                // exception must not leave this channel undrainable forever.
+                _draining = false;
             }
         }
 

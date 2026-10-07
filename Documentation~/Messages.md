@@ -46,7 +46,7 @@ This drives every design decision:
 
 ## Core Concepts
 
-### Messages
+### Message Structs
 
 A message is any `struct` implementing `IEvent` or `ICommand` (both extend
 `IMessage`). Dispatch is allocation-free for any struct: the bus is generic over

@@ -424,7 +424,14 @@ namespace Tutan.Messages.Editor
             int capacity = MessagesInstrumentation.Capacity;
             int newCount = (int)Math.Min(currentCount, totalEver - _lastTotalProcessed);
 
-            if (newCount <= 0) return;
+            if (newCount <= 0)
+            {
+                // Nothing to show — e.g. MessagesInstrumentation.Clear() emptied the
+                // buffer, which keeps TotalEver. Advance the cursor anyway, or every
+                // editor tick would re-snapshot and repaint until a record arrives.
+                _lastTotalProcessed = totalEver;
+                return;
+            }
 
             int startIdx = currentCount - newCount;
             for (int i = startIdx; i < currentCount; i++)

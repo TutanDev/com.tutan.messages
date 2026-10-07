@@ -37,7 +37,7 @@ EventBus.Publish(new PlayerScored { Points = 100, Timestamp = Time.time });
 > is shared across threads. Prefer value-type fields on hot or cross-thread
 > paths — for string-like data, `Unity.Collections.FixedString*` (e.g.
 > `FixedString64Bytes`) or an int handle keeps the message fully value-typed. See
-> [`Documentation~/Messages.md`](Documentation~/Messages.md#messages) for details.
+> [`Documentation~/Messages.md`](Documentation~/Messages.md#message-structs) for details.
 
 ```csharp
 // 4. Unsubscribe by disposing (no delegate-equality footguns)…
