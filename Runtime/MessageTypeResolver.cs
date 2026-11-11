@@ -3,9 +3,9 @@ using System;
 namespace Tutan.Messages
 {
     /// <summary>
-    /// Resolves a serialized message type name — the <c>AssemblyQualifiedName</c>
+    /// Resolves a serialized message type name - the <c>AssemblyQualifiedName</c>
     /// stored by <see cref="EventTypeAttribute"/>/<see cref="CommandTypeAttribute"/>
-    /// fields and by <see cref="MessageReference"/> — back to a <see cref="Type"/>,
+    /// fields and by <see cref="MessageReference"/> - back to a <see cref="Type"/>,
     /// tolerating assembly-identity drift.
     /// <para>
     /// A bare <see cref="Type.GetType(string,bool)"/> returns null once the type's
@@ -15,11 +15,11 @@ namespace Tutan.Messages
     /// assembly part and looks the namespace-qualified name up in every loaded
     /// assembly. Note that <see cref="System.Reflection.Assembly.GetType(string,bool)"/>
     /// rejects assembly-qualified input (it returns null), so the stripping is
-    /// required — passing the stored string straight through never matches.
+    /// required - passing the stored string straight through never matches.
     /// </para>
     /// <para>
     /// Cost: one <c>Type.GetType</c> on the happy path; on a miss, one lookup per
-    /// loaded assembly. Not cached — call it at load/authoring time, not per frame.
+    /// loaded assembly. Not cached - call it at load/authoring time, not per frame.
     /// If two loaded assemblies declare the same full type name, the first match in
     /// <see cref="AppDomain.GetAssemblies"/> order wins.
     /// </para>

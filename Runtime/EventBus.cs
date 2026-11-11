@@ -15,7 +15,7 @@ namespace Tutan.Messages
 
         /// <summary>
         /// Register a handler for event type T. Returns a disposable
-        /// <see cref="Subscription"/> — dispose it directly, via a
+        /// <see cref="Subscription"/> - dispose it directly, via a
         /// <see cref="SubscriptionBag"/>, or tie it to a GameObject's lifetime with
         /// <c>.AddTo(this)</c>.
         /// </summary>
@@ -26,7 +26,7 @@ namespace Tutan.Messages
         public static void Publish<T>(ref T message) where T : struct, IEvent
             => s_bus.Publish(ref message);
 
-        /// <summary>Convenience overload. One struct copy — acceptable for small messages.</summary>
+        /// <summary>Convenience overload. One struct copy - acceptable for small messages.</summary>
         public static void Publish<T>(T message) where T : struct, IEvent
             => s_bus.Publish(ref message); // ref: the copy already happened into this parameter
 
@@ -52,9 +52,9 @@ namespace Tutan.Messages
         // Wipe static state on every Enter Play Mode so the bus stays clean
         // when the user has disabled Domain Reload (Project Settings →
         // Editor → Enter Play Mode Options). Runs at SubsystemRegistration, so
-        // anything subscribed or installed earlier — or from another
+        // anything subscribed or installed earlier - or from another
         // SubsystemRegistration callback, whose order relative to this one is
-        // undefined — is dropped. Install/subscribe at BeforeSceneLoad or later.
+        // undefined - is dropped. Install/subscribe at BeforeSceneLoad or later.
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         static void ResetOnEnterPlayMode() => Reset();
     }

@@ -12,7 +12,7 @@ namespace Tutan.Messages
     }
 
     /// <summary>
-    /// Disposable handle returned by <c>Subscribe</c> — the one way to end a
+    /// Disposable handle returned by <c>Subscribe</c> - the one way to end a
     /// subscription. <see cref="Dispose"/> unsubscribes, so a subscription can be
     /// held in a field and disposed explicitly, ride a <c>using</c> scope, be
     /// collected in a <see cref="SubscriptionBag"/>, or be tied to a GameObject's
@@ -24,9 +24,9 @@ namespace Tutan.Messages
     /// </summary>
     /// <remarks>
     /// Mutable struct caveat: disposing a <i>copy</i> unsubscribes the handler but
-    /// cannot clear the original's fields. That is safe — a second
+    /// cannot clear the original's fields. That is safe - a second
     /// <see cref="Dispose"/> through any copy finds the token already removed and
-    /// is a no-op — but <see cref="IsActive"/> is only trustworthy on the copy you
+    /// is a no-op - but <see cref="IsActive"/> is only trustworthy on the copy you
     /// disposed through.
     /// </remarks>
     public struct Subscription : IDisposable
@@ -40,7 +40,7 @@ namespace Tutan.Messages
             _token = token;
         }
 
-        /// <summary>The wrapped token. Internal — identity is an implementation detail.</summary>
+        /// <summary>The wrapped token. Internal - identity is an implementation detail.</summary>
         internal SubscriptionToken Token => _token;
 
         /// <summary>False once this handle has been disposed (or was never issued by a bus).</summary>
@@ -49,7 +49,7 @@ namespace Tutan.Messages
         /// <summary>
         /// Unsubscribe the handler. Idempotent. Main thread only (same contract as
         /// <c>Subscribe</c>); safe to call during dispatch and safe to call after
-        /// the issuing bus was <c>Reset</c> — that case is a no-op.
+        /// the issuing bus was <c>Reset</c> - that case is a no-op.
         /// </summary>
         public void Dispose()
         {

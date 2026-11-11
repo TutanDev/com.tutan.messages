@@ -5,7 +5,7 @@ namespace Tutan.Messages
 {
     /// <summary>
     /// Outcome of <see cref="CommandBus.Install"/>. Failure is reported here as a
-    /// value, never an exception — check <see cref="Ok"/> and surface
+    /// value, never an exception - check <see cref="Ok"/> and surface
     /// <see cref="Error"/> however the application reports configuration mistakes.
     /// </summary>
     public readonly struct InstallResult
@@ -72,12 +72,12 @@ namespace Tutan.Messages
         /// command type(s) and the currently installed bus is left untouched.
         /// </para>
         /// <para>
-        /// Calling again rebuilds the bus from scratch (composition-root semantics) —
+        /// Calling again rebuilds the bus from scratch (composition-root semantics) -
         /// previously installed handlers are replaced wholesale.
         /// </para>
         /// <para>
         /// A successful install, like <see cref="Reset"/>, discards the commands still
-        /// queued on the live bus — including on the first install, so a command
+        /// queued on the live bus - including on the first install, so a command
         /// enqueued before it is lost (the editor and development builds log a
         /// warning). Install before anything enqueues: from a <c>BeforeSceneLoad</c>
         /// <c>[RuntimeInitializeOnLoadMethod]</c>, or from a bootstrap object with an
@@ -130,7 +130,7 @@ namespace Tutan.Messages
         public static void Publish<T>(ref T message) where T : struct, ICommand
             => s_bus.Publish(ref message);
 
-        /// <summary>Convenience overload. One struct copy — acceptable for small messages.</summary>
+        /// <summary>Convenience overload. One struct copy - acceptable for small messages.</summary>
         public static void Publish<T>(T message) where T : struct, ICommand
             => s_bus.Publish(ref message); // ref: the copy already happened into this parameter
 
@@ -156,9 +156,9 @@ namespace Tutan.Messages
         // Wipe static state on every Enter Play Mode so the bus stays clean
         // when the user has disabled Domain Reload (Project Settings →
         // Editor → Enter Play Mode Options). Runs at SubsystemRegistration, so
-        // anything subscribed or installed earlier — or from another
+        // anything subscribed or installed earlier - or from another
         // SubsystemRegistration callback, whose order relative to this one is
-        // undefined — is dropped. Install/subscribe at BeforeSceneLoad or later.
+        // undefined - is dropped. Install/subscribe at BeforeSceneLoad or later.
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         static void ResetOnEnterPlayMode() => Reset();
     }

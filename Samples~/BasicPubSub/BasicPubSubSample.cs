@@ -7,7 +7,7 @@ namespace Tutan.Messages.Samples.BasicPubSub
 
     /// <summary>
     /// The sample's composition root, already placed in <c>BasicPubSubSample.unity</c>
-    /// with its <see cref="MenuHud"/> / <see cref="ScoreHud"/> references wired —
+    /// with its <see cref="MenuHud"/> / <see cref="ScoreHud"/> references wired -
     /// open the scene and press Play. It switches between the menu and score HUDs
     /// and owns the game-lifecycle events.
     /// <para>
@@ -15,7 +15,7 @@ namespace Tutan.Messages.Samples.BasicPubSub
     /// handlers (<see cref="ScoreModel"/>, <see cref="MenuModel"/>) and binds each
     /// command to its single handler through one <see cref="CommandBus.Install"/>
     /// call. Queue draining is handled for free by the auto-spawned
-    /// <c>[MessagesHost]</c>, so there is nothing else to wire — just press Play.
+    /// <c>[MessagesHost]</c>, so there is nothing else to wire - just press Play.
     /// </para>
     /// <para>
     /// Everything it builds (the models and <see cref="ScoreDecayWorker"/>) and
@@ -46,7 +46,7 @@ namespace Tutan.Messages.Samples.BasicPubSub
             _scoreHud.gameObject.SetActive(false);
 
             // Composition root: bind each command to its one handler. The models are
-            // plain C# objects — their Handle(ref T) methods match MessageHandler<T>.
+            // plain C# objects - their Handle(ref T) methods match MessageHandler<T>.
             _scoreModel = new ScoreModel();
             _menuModel = new MenuModel();
 
@@ -59,7 +59,7 @@ namespace Tutan.Messages.Samples.BasicPubSub
                 Debug.LogError($"[BasicPubSub] Command install failed: {install.Error}");
 
             // Scoped to this component's GameObject: both subscriptions are
-            // disposed automatically when it is destroyed — no OnDestroy needed.
+            // disposed automatically when it is destroyed - no OnDestroy needed.
             EventBus.Subscribe<GameStarted>(OnGameStarted).AddTo(this);
             EventBus.Subscribe<GameEnded>(OnGameEnded).AddTo(this);
         }
@@ -92,7 +92,7 @@ namespace Tutan.Messages.Samples.BasicPubSub
         // The scene ships an EventSystem without an input module so it works with
         // either input backend: the Input System package (Unity 6 default) or the
         // legacy Input Manager. Pick the module that matches the project's Active
-        // Input Handling setting — the wrong one throws or ignores clicks.
+        // Input Handling setting - the wrong one throws or ignores clicks.
         void EnsureUIInputModule()
         {
             var eventSystem = EventSystem.current != null

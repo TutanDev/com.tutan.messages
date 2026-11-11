@@ -4,9 +4,9 @@ namespace Tutan.Messages
 {
     /// <summary>
     /// Internal identity of a subscription (id + message type). Carried inside the
-    /// public <see cref="Subscription"/> handle; consumers never touch it directly —
+    /// public <see cref="Subscription"/> handle; consumers never touch it directly -
     /// deterministic unsubscription goes through <see cref="Subscription.Dispose"/>.
-    /// Lightweight struct — no GC pressure.
+    /// Lightweight struct - no GC pressure.
     /// </summary>
     internal readonly struct SubscriptionToken : IEquatable<SubscriptionToken>
     {

@@ -1,5 +1,5 @@
 // ============================================================================
-// ScriptFileField.cs — Clickable row that represents the C# source file
+// ScriptFileField.cs - Clickable row that represents the C# source file
 // backing a type.
 //
 //   • Single click  → pings (highlights) the .cs asset in the Project window
@@ -101,7 +101,7 @@ namespace Tutan.Messages.Editor
         }
 
         /// <summary>
-        /// Point this row at a type identified by full (or assembly-qualified) name —
+        /// Point this row at a type identified by full (or assembly-qualified) name -
         /// used for subscriber snapshots, which carry the target type as a string.
         /// </summary>
         public void SetTypeName(string fullName)
@@ -242,7 +242,7 @@ namespace Tutan.Messages.Editor
         /// <summary>
         /// Resolve a type's full or assembly-qualified name across loaded assemblies
         /// (drift-tolerant, see <see cref="MessageTypeResolver.Resolve"/>). Cached per
-        /// input string for the lifetime of the domain — misses are cached too, which
+        /// input string for the lifetime of the domain - misses are cached too, which
         /// is correct because adding a type triggers a domain reload that clears it.
         /// </summary>
         public static Type ResolveType(string fullName)

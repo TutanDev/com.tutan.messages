@@ -1,5 +1,5 @@
 // ============================================================================
-// MessagesConsoleWindow.cs — Live view of EventBus / CommandBus traffic.
+// MessagesConsoleWindow.cs - Live view of EventBus / CommandBus traffic.
 //
 // Opens via "Window → Tutan → Messages Console". While open it sets
 // MessagesInstrumentation.Enabled = true; while closed it disables it again
@@ -192,7 +192,7 @@ namespace Tutan.Messages.Editor
         void FullRebuild()
         {
             // Snapshot(out totalEver) pairs the records and the total under one
-            // lock — a separate TotalEver/Count read pair can tear against
+            // lock - a separate TotalEver/Count read pair can tear against
             // worker-thread appends and desync the incremental catch-up.
             _filtered.Clear();
             ResetSelection();
@@ -415,7 +415,7 @@ namespace Tutan.Messages.Editor
         {
             // The paired overload: totalEver is read under the same lock as the
             // records, so "the last N records are new" is exact. Reading TotalEver
-            // before snapshotting let worker-thread records land in between — those
+            // before snapshotting let worker-thread records land in between - those
             // were displayed twice and pushed an equal number of older records out
             // of the catch-up window entirely.
             var snapshot = MessagesInstrumentation.Snapshot(out long totalEver);
@@ -426,7 +426,7 @@ namespace Tutan.Messages.Editor
 
             if (newCount <= 0)
             {
-                // Nothing to show — e.g. MessagesInstrumentation.Clear() emptied the
+                // Nothing to show - e.g. MessagesInstrumentation.Clear() emptied the
                 // buffer, which keeps TotalEver. Advance the cursor anyway, or every
                 // editor tick would re-snapshot and repaint until a record arrives.
                 _lastTotalProcessed = totalEver;

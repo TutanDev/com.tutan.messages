@@ -6,7 +6,7 @@ namespace Tutan.Messages
 {
     /// <summary>
     /// Collects <see cref="Subscription"/>s so a whole group can be unsubscribed
-    /// with one <see cref="Dispose"/> (or <see cref="Clear"/>) call — one bag per
+    /// with one <see cref="Dispose"/> (or <see cref="Clear"/>) call - one bag per
     /// system instead of one <see cref="Subscription"/> field per subscription.
     /// Reusable after disposal: <c>Add</c> works again and a later Dispose
     /// releases the new batch.
@@ -40,7 +40,7 @@ namespace Tutan.Messages
 
     /// <summary>
     /// Hidden component that ties a <see cref="SubscriptionBag"/> to a GameObject's
-    /// lifetime. Added automatically by <c>Subscription.AddTo(gameObject)</c> —
+    /// lifetime. Added automatically by <c>Subscription.AddTo(gameObject)</c> -
     /// never add it by hand. It is hidden from the Inspector and never saved into
     /// a scene or prefab (its bag is runtime-only state, so a serialized copy would
     /// just be an empty component).
@@ -49,7 +49,7 @@ namespace Tutan.Messages
     /// Disposal rides Unity's <c>OnDestroy</c>, which Unity only invokes on
     /// components whose GameObject has been active at least once. A subscription
     /// anchored to a GameObject that is destroyed without ever having been active
-    /// (e.g. a pooled instance created inactive) is therefore not disposed — hold
+    /// (e.g. a pooled instance created inactive) is therefore not disposed - hold
     /// the <see cref="Subscription"/> or use a <see cref="SubscriptionBag"/> for
     /// those lifetimes. The anchor is <c>[ExecuteAlways]</c>, so destroying its
     /// GameObject disposes the bag in edit mode too (<c>AddTo</c> called from an

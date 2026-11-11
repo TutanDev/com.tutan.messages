@@ -15,7 +15,7 @@ namespace Tutan.Messages.Tests
 
     public class RelaxedConstraintTests
     {
-        // Reference-type fields — would not have compiled under the old
+        // Reference-type fields - would not have compiled under the old
         // `unmanaged` constraint.
         struct LogLine : IEvent { public string Text; public int Level; }
         struct BatchUpdate : IEvent { public List<int> Ids; }
@@ -63,7 +63,7 @@ namespace Tutan.Messages.Tests
             EventBus.Subscribe<BatchUpdate>((ref BatchUpdate m) => received = m.Ids);
 
             EventBus.Enqueue(new BatchUpdate { Ids = payload });
-            Assert.IsNull(received); // deferred — not yet delivered
+            Assert.IsNull(received); // deferred - not yet delivered
 
             EventBus.DrainQueues();
 

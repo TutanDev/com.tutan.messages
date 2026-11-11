@@ -10,7 +10,7 @@ namespace Tutan.Messages.Samples.BasicPubSub
 
         private void OnEnable()
         {
-            // Hide the game-over banner whenever the menu (re)appears — including the very
+            // Hide the game-over banner whenever the menu (re)appears - including the very
             // first show and between games. The composition root calls SetFinalScore after
             // re-activating us when a game ends.
             _gameOver.gameObject.SetActive(false);
@@ -24,7 +24,7 @@ namespace Tutan.Messages.Samples.BasicPubSub
 
         public void SetFinalScore(int score)
         {
-            // The reported score is the fatal decay delta — a negative number whose
+            // The reported score is the fatal decay delta - a negative number whose
             // magnitude grew with survival time. Negate it for display.
             _gameOver.text = $"Game Over\n\nFinal Score: {-score}";
             _gameOver.gameObject.SetActive(true);

@@ -11,7 +11,7 @@ namespace Tutan.Messages
     [AddComponentMenu("Tutan/Messages Host")]
     public sealed class MessagesHost : MonoBehaviour
     {
-        // One host must drain per frame, not two — guards against a manually
+        // One host must drain per frame, not two - guards against a manually
         // placed host coexisting with the auto-spawned one (or two manual ones).
         static MessagesHost s_active;
 
@@ -20,7 +20,7 @@ namespace Tutan.Messages
             if (s_active != null && s_active != this)
             {
                 Debug.LogWarning(
-                    "[Messages] A MessagesHost is already active — destroying the duplicate component. " +
+                    "[Messages] A MessagesHost is already active - destroying the duplicate component. " +
                     "Define TUTAN_MESSAGES_NO_AUTO_HOST if you want to own the drain loop yourself.",
                     s_active);
                 Destroy(this);

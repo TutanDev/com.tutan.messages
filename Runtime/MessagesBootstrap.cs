@@ -7,7 +7,7 @@ namespace Tutan.Messages
     /// drain their queued messages every <c>LateUpdate</c> with zero configuration.
     ///
     /// On by default. Define <c>TUTAN_MESSAGES_NO_AUTO_HOST</c> to opt out when you
-    /// want to own the drain loop yourself — attach <see cref="MessagesHost"/> to a
+    /// want to own the drain loop yourself - attach <see cref="MessagesHost"/> to a
     /// persistent GameObject, or call <see cref="CommandBus.DrainQueues"/> /
     /// <see cref="EventBus.DrainQueues"/> from your own update logic (a PlayerLoop
     /// callback, a manager, etc.). A custom drain loop should also call
@@ -25,7 +25,7 @@ namespace Tutan.Messages
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         static void InstallHost()
         {
-            // HideInHierarchy only — NOT HideAndDontSave. DontSave-flagged objects
+            // HideInHierarchy only - NOT HideAndDontSave. DontSave-flagged objects
             // are excluded from the editor's play-mode cleanup, so they would leak
             // one hidden host per play session. DontDestroyOnLoad already provides
             // the scene-load persistence.

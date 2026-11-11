@@ -2,6 +2,12 @@
 
 All notable changes to `com.tutan.messages` will be documented in this file.
 
+## [Unreleased]
+
+### Changed
+- **Plain dashes in place of em dashes** in the warning `MessagesHost` logs for a duplicate host, and in the Inspector's warning for a `MessageReference` whose type cannot be found.
+  The comments, the docs and the BasicPubSub sample use plain dashes too.
+
 ## [1.0.0] - 2026-10-07
 
 First public Asset Store release. Requires Unity 6000.3 LTS or newer. The public API is

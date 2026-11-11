@@ -5,7 +5,7 @@ namespace Tutan.Messages
 {
     /// <summary>
     /// Builder used at the composition root to declare the single handler for each
-    /// command type. Obtained inside the <see cref="CommandBus.Install"/> callback —
+    /// command type. Obtained inside the <see cref="CommandBus.Install"/> callback -
     /// it cannot be constructed directly.
     /// <para>
     /// N:1 is enforced here as a value, not an exception: registering a second handler
@@ -25,7 +25,7 @@ namespace Tutan.Messages
 
         /// <summary>
         /// Bind <paramref name="handler"/> as the one handler for command type
-        /// <typeparamref name="T"/>. Fluent — chain calls for each command. A duplicate
+        /// <typeparamref name="T"/>. Fluent - chain calls for each command. A duplicate
         /// command type or a null handler is recorded as an install error rather than thrown.
         /// </summary>
         public CommandRegistry Handle<T>(MessageHandler<T> handler) where T : struct, ICommand

@@ -13,13 +13,13 @@ namespace Tutan.Messages
     public interface IMessage { }
 
     /// <summary>
-    /// Marker for event messages. Notification — any number of handlers.
+    /// Marker for event messages. Notification - any number of handlers.
     /// Naming convention: past tense (PlayerMoved, OrderPlaced).
     /// </summary>
     public interface IEvent : IMessage { }
 
     /// <summary>
-    /// Marker for command messages. Intent — at most one handler.
+    /// Marker for command messages. Intent - at most one handler.
     /// Naming convention: imperative verb (MovePlayer, PlaceOrder).
     ///
     /// The single-handler rule is enforced by <see cref="CommandBus"/>, not by

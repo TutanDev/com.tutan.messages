@@ -41,7 +41,7 @@ namespace Tutan.Messages.Tests
                 r => r.Handle<MovePlayer>((ref MovePlayer m) => received = m.Value));
 
             CommandBus.Enqueue(new MovePlayer { Value = 99 });
-            Assert.AreEqual(-1, received); // deferred — not yet delivered
+            Assert.AreEqual(-1, received); // deferred - not yet delivered
 
             CommandBus.DrainQueues();
             Assert.AreEqual(99, received);
@@ -50,7 +50,7 @@ namespace Tutan.Messages.Tests
         [Test]
         public void DuplicateHandler_FailsInstall_NoThrow()
         {
-            // Two handlers for the same command type — reported, not thrown.
+            // Two handlers for the same command type - reported, not thrown.
             var result = CommandBus.Install(r => r
                 .Handle<PlaceOrder>((ref PlaceOrder m) => { })
                 .Handle<PlaceOrder>((ref PlaceOrder m) => { }));
@@ -101,8 +101,8 @@ namespace Tutan.Messages.Tests
         [Test]
         public void Install_DiscardsCommandsQueuedBeforeIt_AndWarns()
         {
-            // Install swaps in a fresh bus, so a command enqueued before it — even
-            // before the first install — is dropped. The editor says so.
+            // Install swaps in a fresh bus, so a command enqueued before it - even
+            // before the first install - is dropped. The editor says so.
             CommandBus.Enqueue(new MovePlayer { Value = 7 });
 
             int received = -1;

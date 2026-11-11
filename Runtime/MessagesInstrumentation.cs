@@ -1,5 +1,5 @@
 // ============================================================================
-// MessagesInstrumentation.cs — Optional pub/sub observation layer
+// MessagesInstrumentation.cs - Optional pub/sub observation layer
 //
 // All Record* methods are decorated with [Conditional("UNITY_EDITOR"),
 // Conditional("TUTAN_MESSAGES_DEBUG")] so the C# compiler strips every
@@ -20,12 +20,12 @@ namespace Tutan.Messages
     /// <summary>
     /// Optional observation layer over both buses: while <see cref="Enabled"/> is
     /// true, every subscribe/unsubscribe/publish/enqueue (and optionally drain) is
-    /// appended to a thread-safe ring buffer that the Messages Console — or your
-    /// own diagnostics via <see cref="Snapshot()"/> — can poll. The bus-side hooks
+    /// appended to a thread-safe ring buffer that the Messages Console - or your
+    /// own diagnostics via <see cref="Snapshot()"/> - can poll. The bus-side hooks
     /// are <c>[Conditional]</c> on <c>UNITY_EDITOR</c> / <c>TUTAN_MESSAGES_DEBUG</c>,
     /// so in release player builds every hook call site is stripped and nothing is
     /// recorded. The ring buffer is only allocated by the first recorded operation,
-    /// so a release player never allocates it — even if your own code sets
+    /// so a release player never allocates it - even if your own code sets
     /// <see cref="Enabled"/> or polls <see cref="Snapshot()"/>.
     /// </summary>
     public static class MessagesInstrumentation
@@ -134,22 +134,22 @@ namespace Tutan.Messages
 
         /// <summary>
         /// Master toggle. When false, every Record* call returns immediately. The
-        /// Messages Console sets it true while open and false when closed — code that
+        /// Messages Console sets it true while open and false when closed - code that
         /// drives its own diagnostics alongside the window should re-assert it.
         /// </summary>
         public static bool Enabled;
 
-        /// <summary>When true, <see cref="Op.DrainStart"/> / <see cref="Op.DrainEnd"/> are appended to the buffer. Off by default — drains fire every frame and would flood the ring buffer.</summary>
+        /// <summary>When true, <see cref="Op.DrainStart"/> / <see cref="Op.DrainEnd"/> are appended to the buffer. Off by default - drains fire every frame and would flood the ring buffer.</summary>
         public static bool RecordDrains;
 
-        // Frame counter — updated by MessagesHost from main thread so worker
+        // Frame counter - updated by MessagesHost from main thread so worker
         // threads can read it without touching UnityEngine.Time.
         internal static int CurrentFrame;
 
         /// <summary>
         /// Stamp the current main-thread frame onto subsequent records. Call once
         /// per frame from the main thread (the auto-host does this in LateUpdate).
-        /// [Conditional] so the call — and the Time.frameCount read passed to it —
+        /// [Conditional] so the call - and the Time.frameCount read passed to it -
         /// is stripped from release player builds. This is also the only static
         /// member the host touches, so stripping it means the host never
         /// initializes this type in release.
@@ -202,7 +202,7 @@ namespace Tutan.Messages
 
         /// <summary>
         /// Copy the ring buffer's records, oldest first. Allocates a new list per
-        /// call — poll it off the hot path.
+        /// call - poll it off the hot path.
         /// </summary>
         public static List<Record> Snapshot() => Snapshot(out _);
 
@@ -285,7 +285,7 @@ namespace Tutan.Messages
         // point-in-time snapshot: the delegates may later be unsubscribed or GC'd.
         //
         // Enqueue can run on a worker thread while the main thread mutates the
-        // entry list, so enumeration is best-effort — instrumentation must never
+        // entry list, so enumeration is best-effort - instrumentation must never
         // throw into the bus. A torn read just yields a slightly incomplete list.
         static Subscriber[] CaptureSubscribers(ChannelBase channel)
         {
@@ -346,7 +346,7 @@ namespace Tutan.Messages
                 s_head = (s_head + 1) % buffer.Length;
                 if (s_count < buffer.Length) s_count++;
                 // Inside the lock so TotalEver can never run ahead of the buffer
-                // contents — the console's incremental catch-up pairs the two.
+                // contents - the console's incremental catch-up pairs the two.
                 // Still Interlocked: TotalEver reads it without taking the lock.
                 Interlocked.Increment(ref s_totalEver);
             }

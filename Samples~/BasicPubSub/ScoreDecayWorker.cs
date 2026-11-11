@@ -9,10 +9,10 @@ namespace Tutan.Messages.Samples.BasicPubSub
     /// <summary>
     /// A background thread that drains the score every second, one point more each
     /// tick (-1, -2, -3, …) so the pressure ramps up the longer the game runs. It
-    /// stands in for anything that does not live on the main thread — a timer,
+    /// stands in for anything that does not live on the main thread - a timer,
     /// network tick, simulation step.
     /// <para>
-    /// It cannot call <see cref="CommandBus.Publish{T}(T)"/> — that is main-thread only.
+    /// It cannot call <see cref="CommandBus.Publish{T}(T)"/> - that is main-thread only.
     /// Instead it uses <see cref="CommandBus.Enqueue"/>, which is thread-safe. The
     /// queued command is dispatched on the main thread by <c>MessagesHost</c> in the
     /// next <c>LateUpdate</c>, so <see cref="ScoreModel"/> still runs where it is safe
@@ -20,7 +20,7 @@ namespace Tutan.Messages.Samples.BasicPubSub
     /// </para>
     /// <para>
     /// Both this worker and the HUD button send the very same <see cref="AdjustScore"/>
-    /// command to the very same handler — one sync, one async — which is exactly the
+    /// command to the very same handler - one sync, one async - which is exactly the
     /// N:1 guarantee the CommandBus exists to provide.
     /// </para>
     /// <para>
@@ -32,7 +32,7 @@ namespace Tutan.Messages.Samples.BasicPubSub
     {
         const int TickMs = 1000;
 
-        // Grows (more negative) by one each tick — the decay accelerates over time.
+        // Grows (more negative) by one each tick - the decay accelerates over time.
         int _nextDecayDelta = -1;
 
         void EnqueueDecayTick()
@@ -71,8 +71,8 @@ namespace Tutan.Messages.Samples.BasicPubSub
         void OnDisable()
         {
             // Signal the loop to stop and wait for it to unwind, so the thread is gone
-            // once OnDisable returns. A tick it already queued — or queued between game
-            // over and this OnDisable, which Destroy() defers to the end of the frame —
+            // once OnDisable returns. A tick it already queued - or queued between game
+            // over and this OnDisable, which Destroy() defers to the end of the frame -
             // still reaches ScoreModel, whose game-over guard ignores it.
             _running = false;
             _thread?.Join();
@@ -82,7 +82,7 @@ namespace Tutan.Messages.Samples.BasicPubSub
         void DecayLoop()
         {
             // Sleep in short slices instead of one 1000 ms block so the loop notices a
-            // stop request quickly — that keeps OnDisable's Join() from stalling the main
+            // stop request quickly - that keeps OnDisable's Join() from stalling the main
             // thread for up to a second.
             const int SliceMs = 50;
             int elapsed = 0;

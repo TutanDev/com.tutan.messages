@@ -39,7 +39,7 @@ namespace Tutan.Messages
     /// The payload round-trips through <c>JsonUtility</c>, which only serializes
     /// plain structs marked <c>[Serializable]</c>. Message structs you want to
     /// author through an <see cref="EventReference"/>/<see cref="CommandReference"/>
-    /// must carry that attribute — without it the payload silently stays at its
+    /// must carry that attribute - without it the payload silently stays at its
     /// default values. Bus dispatch itself does not need it.
     /// </para>
     /// </summary>
@@ -52,7 +52,7 @@ namespace Tutan.Messages
         /// <summary>The stored <c>AssemblyQualifiedName</c> of the message type; empty when none is picked.</summary>
         public string TypeName => typeName;
 
-        /// <summary>True when a type has been picked. Does not guarantee the type still resolves — see <see cref="GetMessageType"/>.</summary>
+        /// <summary>True when a type has been picked. Does not guarantee the type still resolves - see <see cref="GetMessageType"/>.</summary>
         public bool IsValid => !string.IsNullOrEmpty(typeName);
 
         /// <summary>
@@ -70,7 +70,7 @@ namespace Tutan.Messages
 
         /// <summary>
         /// Creates an instance of the message from serialized data. The returned
-        /// message carries exactly the values authored in the inspector — no fields
+        /// message carries exactly the values authored in the inspector - no fields
         /// are populated implicitly. If the stored JSON cannot be parsed (e.g. it
         /// was mangled by a merge or edited by hand), a warning is logged and the
         /// type's default values are used - never an exception.

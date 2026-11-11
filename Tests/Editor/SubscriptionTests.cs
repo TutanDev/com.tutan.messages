@@ -50,7 +50,7 @@ namespace Tutan.Messages.Tests
             var copy = original;
 
             copy.Dispose();
-            original.Dispose(); // token already removed — harmless
+            original.Dispose(); // token already removed - harmless
 
             EventBus.Publish(new PlayerMoved());
             Assert.AreEqual(0, callCount);
@@ -197,7 +197,7 @@ namespace Tutan.Messages.Tests
         [Test]
         public void DestroyingTheGameObject_DisposesItsSubscriptions()
         {
-            // The anchor is [ExecuteAlways], so its OnDestroy runs in edit mode too —
+            // The anchor is [ExecuteAlways], so its OnDestroy runs in edit mode too -
             // the path an [ExecuteAlways] script's AddTo(this) relies on.
             int callCount = 0;
             EventBus.Subscribe<PlayerMoved>((ref PlayerMoved m) => callCount++).AddTo(_go);

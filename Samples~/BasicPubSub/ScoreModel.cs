@@ -44,7 +44,7 @@ namespace Tutan.Messages.Samples.BasicPubSub
                 _gameOver = true;
                 // Game over. The final score is the fatal decay tick itself: the decay
                 // grows every second, so the longer the player survived, the bigger the
-                // delta that ended the run — survival time is the score.
+                // delta that ended the run - survival time is the score.
                 EventBus.Publish(new GameEnded { FinalScore = cmd.Delta });
             }
             else

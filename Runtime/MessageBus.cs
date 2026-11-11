@@ -1,5 +1,5 @@
 // ============================================================================
-// MessageBus.cs — Zero-allocation Pub/Sub for Unity 6 / XR
+// MessageBus.cs - Zero-allocation Pub/Sub for Unity 6 / XR
 //
 // Supports:
 //   - Immediate (synchronous) dispatch within current frame
@@ -30,7 +30,7 @@ namespace Tutan.Messages
     /// worker thread (the classic mistake: an <c>async</c> continuation that
     /// resumed on the thread pool) would otherwise corrupt the subscription list
     /// silently. The check is <c>[Conditional]</c>, so release player builds
-    /// strip every call site — zero cost on the hot path.
+    /// strip every call site - zero cost on the hot path.
     /// </summary>
     internal static class MainThreadGuard
     {
@@ -38,8 +38,8 @@ namespace Tutan.Messages
 
         // SubsystemRegistration always runs on the main thread, before user code.
         // In the editor, InitializeOnLoadMethod also captures it after every domain
-        // reload (also main thread), so edit-mode callers — EditMode tests,
-        // [ExecuteAlways] scripts, editor tools — are checked too, not only after
+        // reload (also main thread), so edit-mode callers - EditMode tests,
+        // [ExecuteAlways] scripts, editor tools - are checked too, not only after
         // Play Mode has been entered once.
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
 #if UNITY_EDITOR
@@ -85,7 +85,7 @@ namespace Tutan.Messages
 
     /// <summary>
     /// Typed channel holding subscriptions and a pending queue for type T.
-    /// Internal — never exposed to consumers.
+    /// Internal - never exposed to consumers.
     /// </summary>
     internal sealed class Channel<T> : ChannelBase where T : struct, IMessage
     {
@@ -96,12 +96,12 @@ namespace Tutan.Messages
             public bool Active;
         }
 
-        // Subscriptions — flat list, holes marked inactive. Compacted lazily.
+        // Subscriptions - flat list, holes marked inactive. Compacted lazily.
         internal readonly List<Entry> Entries = new(8);
         int _dirtyCount;  // tracks inactive entries for compaction heuristic
         int _activeCount; // tracks active entries for O(1) SubscriberCount
 
-        // Queue for deferred dispatch — allocated on first Enqueue call.
+        // Queue for deferred dispatch - allocated on first Enqueue call.
         ConcurrentQueue<T> _pendingQueue;
 
         // Drain budget bookkeeping, used instead of ConcurrentQueue.Count: with more
@@ -206,7 +206,7 @@ namespace Tutan.Messages
             var queue = Volatile.Read(ref _pendingQueue);
             if (queue == null || queue.IsEmpty || _draining) return;
 
-            // Bound the drain to the backlog present when this call started — an
+            // Bound the drain to the backlog present when this call started - an
             // unbounded loop would let a handler that enqueues its own type on
             // every receipt hang the frame forever. What it enqueues waits for the
             // next drain. A DrainQueues call made from inside a handler skips this
@@ -222,7 +222,7 @@ namespace Tutan.Messages
                     _dequeued = unchecked(_dequeued + 1);
 
                     // A drained message is being dispatched now, so record it as a
-                    // Publish — immediate Publish records in MessageBus.Publish, but
+                    // Publish - immediate Publish records in MessageBus.Publish, but
                     // that path is bypassed here, so the dispatch would otherwise be
                     // invisible to the Messages Console. [Conditional]-stripped in
                     // release, same as every other Record* call.
@@ -232,7 +232,7 @@ namespace Tutan.Messages
             }
             finally
             {
-                // finally: same reason as _dispatchDepth in Publish — an escaping
+                // finally: same reason as _dispatchDepth in Publish - an escaping
                 // exception must not leave this channel undrainable forever.
                 _draining = false;
             }
@@ -284,7 +284,7 @@ namespace Tutan.Messages
         void CompactIfNeeded()
         {
             // Compact only when there are at least 4 dead entries AND they make
-            // up at least a quarter of the list — small absolute counts aren't
+            // up at least a quarter of the list - small absolute counts aren't
             // worth an O(n) RemoveAll, and on large lists a low dead ratio
             // would make every few unsubscribes pay a full-list sweep.
             if (_dirtyCount < 4 || _dirtyCount < Entries.Count / 4) return;
@@ -307,8 +307,8 @@ namespace Tutan.Messages
     /// main-thread call: channel creation goes through a ConcurrentDictionary,
     /// and the message lands in a per-channel ConcurrentQueue.
     /// <para>
-    /// One carve-out: replacing the bus wholesale — the static <c>EventBus.Reset</c>/
-    /// <c>CommandBus.Reset</c>/<c>CommandBus.Install</c> swap — is *not* safe to race
+    /// One carve-out: replacing the bus wholesale - the static <c>EventBus.Reset</c>/
+    /// <c>CommandBus.Reset</c>/<c>CommandBus.Install</c> swap - is *not* safe to race
     /// against a worker-thread Enqueue, which can land its message in the discarded
     /// instance. Quiesce workers before resetting or re-installing; both are
     /// composition-root operations, not steady-state ones. See Documentation~/Threading.md.
@@ -323,14 +323,14 @@ namespace Tutan.Messages
         readonly ConcurrentDictionary<Type, ChannelBase> _channels = new(concurrencyLevel: 2, capacity: 32);
 
         // Cached channel list for DrainQueues. Enumerating a ConcurrentDictionary
-        // allocates a class enumerator, and DrainQueues runs every frame — this
+        // allocates a class enumerator, and DrainQueues runs every frame - this
         // list keeps the steady-state drain allocation-free. Main thread only
         // (like DrainQueues itself); rebuilt when the channel set changes.
         readonly List<ChannelBase> _drainList = new();
 
         int _nextTokenId;
 
-        // Guards only the double-Dispose(bool) path — it is not a "bus is unusable"
+        // Guards only the double-Dispose(bool) path - it is not a "bus is unusable"
         // flag, and the entry points deliberately do not throw ObjectDisposedException.
         // The static buses (EventBus/CommandBus) always swap in a fresh instance on
         // Reset/Install, so a disposed bus is never published to again; reuse of a
@@ -365,7 +365,7 @@ namespace Tutan.Messages
 
         /// <summary>
         /// Register a handler for message type T. Returns a disposable
-        /// <see cref="Subscription"/> bound to this bus instance — dispose it
+        /// <see cref="Subscription"/> bound to this bus instance - dispose it
         /// (directly, via a <see cref="SubscriptionBag"/>, or with <c>AddTo</c>) to
         /// unsubscribe. Because the handle captures the bus instance, disposing it
         /// after the issuing bus was replaced (the static <c>EventBus.Reset</c>/
@@ -393,7 +393,7 @@ namespace Tutan.Messages
         /// <summary>
         /// Remove a subscription by token. Safe to call during dispatch.
         /// Returns false if the token was already unsubscribed or invalid.
-        /// Reached through <see cref="Subscription.Dispose"/> — not public API.
+        /// Reached through <see cref="Subscription.Dispose"/> - not public API.
         /// </summary>
         internal bool Unsubscribe(SubscriptionToken token)
         {
@@ -417,7 +417,7 @@ namespace Tutan.Messages
 
             // Look up the channel first so instrumentation can snapshot the
             // subscribers as they are at this instant. channelBase is null when
-            // nothing has ever subscribed — the publish is still recorded.
+            // nothing has ever subscribed - the publish is still recorded.
             _channels.TryGetValue(typeof(T), out var channelBase);
             MessagesInstrumentation.RecordPublish(_instrumentationKind, ref message, channelBase);
 
@@ -437,7 +437,7 @@ namespace Tutan.Messages
         }
 
         /// <summary>
-        /// Publish a boxed message whose concrete type is only known at runtime —
+        /// Publish a boxed message whose concrete type is only known at runtime -
         /// the editor synthetic-publish path. One unbox inside the channel; never
         /// used on the hot path. Main thread only. A type with no channel (nobody
         /// has subscribed) is recorded and then a no-op, same as the generic path.
@@ -516,7 +516,7 @@ namespace Tutan.Messages
         }
 
         /// <summary>
-        /// Number of message types with a channel on this bus — every type that has
+        /// Number of message types with a channel on this bus - every type that has
         /// been subscribed to or enqueued at least once since the last reset.
         /// </summary>
         public int ChannelCount => _channels.Count;
@@ -524,7 +524,7 @@ namespace Tutan.Messages
         /// <summary>
         /// Names of the message types whose queues still hold undrained messages,
         /// comma-separated, or null when every queue is empty. Diagnostics for the
-        /// static facades' bus swap — allocates; never call it per frame.
+        /// static facades' bus swap - allocates; never call it per frame.
         /// </summary>
         internal string DescribePendingQueues()
         {
@@ -540,7 +540,7 @@ namespace Tutan.Messages
         }
 
         /// <summary>
-        /// Walk all active subscriptions. Editor-only diagnostic — allocates
+        /// Walk all active subscriptions. Editor-only diagnostic - allocates
         /// per call. Not part of the public API.
         /// </summary>
         internal IEnumerable<(Type MessageType, IEnumerable<(int TokenId, Delegate Handler)> Entries)> EnumerateSubscriptions()
@@ -553,7 +553,7 @@ namespace Tutan.Messages
         {
             // Fast path: lock-free read. Slow path on first use of T allocates a
             // Channel<T>; if two threads race, GetOrAdd ensures only one survives
-            // — the loser's channel is unreachable and GC'd.
+            // - the loser's channel is unreachable and GC'd.
             if (_channels.TryGetValue(typeof(T), out var existing))
                 return (Channel<T>)existing;
 
@@ -565,7 +565,7 @@ namespace Tutan.Messages
         /// Drop all subscriptions and queued messages and mark the instance disposed.
         /// The static facades call this when swapping in a fresh bus on
         /// <c>Reset</c>/<c>Install</c>; a disposed instance is not meant to be
-        /// reused — to clear a bus you keep, use <see cref="Reset"/> instead.
+        /// reused - to clear a bus you keep, use <see cref="Reset"/> instead.
         /// </summary>
         public void Dispose()
         {

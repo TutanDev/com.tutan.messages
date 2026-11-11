@@ -115,7 +115,7 @@ namespace Tutan.Messages.Editor
 
         // Resolve which popup entry a stored type string should select. Three cases:
         //   • empty                          → (None) at index 0.
-        //   • matches a listed type — by exact string, or by resolved Type identity
+        //   • matches a listed type - by exact string, or by resolved Type identity
         //     when the stored assembly-qualified name has drifted (assembly version
         //     changed) but still resolves → that type's entry.
         //   • unresolved or no longer listed → a trailing "(Missing) …" entry is
@@ -152,7 +152,7 @@ namespace Tutan.Messages.Editor
         // A warning shown beneath the popup when the stored type can't be resolved,
         // so an orphaned reference is obvious instead of looking like an empty field.
         internal static HelpBox MissingTypeWarning(string stored) => new HelpBox(
-            $"Stored message type '{ShortName(stored)}' could not be found — it may have been " +
+            $"Stored message type '{ShortName(stored)}' could not be found - it may have been " +
             "renamed, moved, or deleted. The reference is preserved; pick a type to replace it.",
             HelpBoxMessageType.Warning);
 
@@ -193,7 +193,7 @@ namespace Tutan.Messages.Editor
             var dataJsonProp = property.FindPropertyRelative("dataJson");
 
             // For array/List<T> fields Unity invokes the drawer per element, but
-            // fieldInfo still describes the collection field — classify by the
+            // fieldInfo still describes the collection field - classify by the
             // element type, or the category (and the publish button) is lost.
             var referenceType = ElementType(fieldInfo.FieldType);
             Type baseType = typeof(IMessage);
@@ -448,7 +448,7 @@ namespace Tutan.Messages.Editor
                 return Bind(new ColorField(label) { value = (Color)val });
             if (type == typeof(Quaternion))
             {
-                // Quaternion has no dedicated field — edit it as euler angles, same as
+                // Quaternion has no dedicated field - edit it as euler angles, same as
                 // the Transform inspector does.
                 var euler = new Vector3Field(label) { value = ((Quaternion)val).eulerAngles };
                 euler.RegisterValueChangedCallback(evt => persist(Quaternion.Euler(evt.newValue)));
