@@ -5,7 +5,7 @@
 # Examples
 
 > **Runnable sample.** Everything below except `SubscriptionBag` is exercised by
-> the **Basic Publish / Subscribe** sample shipped with the package — import it from **Package Manager
+> the **Basic Publish / Subscribe** sample shipped with the package - import it from **Package Manager
 > ▸ Tutan Messages ▸ Samples ▸ Import**. It is a self-contained score clicker (one
 > scene, ready to play) where a button and a background thread both drive a
 > single score model through the buses. `BasicPubSubSample` is the composition
@@ -15,10 +15,10 @@
 >
 > | Sample file | Shows |
 > |---|---|
-> | `ScoreHud` / `MenuHud` | `EventBus.Subscribe` / `Subscription.Dispose` and publishing commands from a view — [Basic Publish / Subscribe](#basic-publish--subscribe) |
-> | `BasicPubSubSample` | The composition root: binds command handlers via `CommandBus.Install` and switches HUDs on `GameStarted`/`GameEnded` events — [Bootstrap](Bootstrap.md) |
+> | `ScoreHud` / `MenuHud` | `EventBus.Subscribe` / `Subscription.Dispose` and publishing commands from a view - [Basic Publish / Subscribe](#basic-publish--subscribe) |
+> | `BasicPubSubSample` | The composition root: binds command handlers via `CommandBus.Install` and switches HUDs on `GameStarted`/`GameEnded` events - [Bootstrap](Bootstrap.md) |
 > | `ScoreModel` / `MenuModel` | A single command handler that re-broadcasts results as events |
-> | `ScoreDecayWorker` | `CommandBus.Enqueue` from a background thread (a coroutine on Web players) — [Queued Dispatch](#queued-dispatch-from-a-worker-thread) |
+> | `ScoreDecayWorker` | `CommandBus.Enqueue` from a background thread (a coroutine on Web players) - [Queued Dispatch](#queued-dispatch-from-a-worker-thread) |
 
 ## Basic Publish / Subscribe
 
@@ -80,7 +80,7 @@ provides.
 
 ## Subscription Lifetimes
 
-The handle field + `OnDisable` pair above is the explicit form — right when the
+The handle field + `OnDisable` pair above is the explicit form - right when the
 subscription toggles with the component. When a subscription should simply live
 and die with the component, skip the bookkeeping entirely: `.AddTo(this)` ties
 the `Subscription` to the GameObject, and it is disposed automatically in
@@ -141,7 +141,7 @@ public struct FrameDecoded : IEvent
 
 public class VideoStreamReceiver
 {
-    // Called on a network/decode thread — NOT the main thread
+    // Called on a network/decode thread - NOT the main thread
     void OnFrameReady(int index, int w, int h)
     {
         var msg = new FrameDecoded
@@ -178,12 +178,12 @@ public class VideoTextureUpdater : MonoBehaviour
 
 `Enqueue` is shared by both buses, so the same pattern works for commands:
 `CommandBus.Enqueue(cmd)` is the thread-safe way to drive a command's single
-handler from off the main thread. The bundled sample uses exactly this — its
+handler from off the main thread. The bundled sample uses exactly this - its
 `ScoreDecayWorker` runs a background thread that calls
 `CommandBus.Enqueue(new AdjustScore { ... })` once a second, while the on-screen
 button calls `CommandBus.Publish(new AdjustScore { ... })` on the main thread.
 Both routes reach the one `AdjustScore` handler, which is the whole point of the
-N:1 guarantee: it does not matter who sends a command, or from which thread —
+N:1 guarantee: it does not matter who sends a command, or from which thread -
 the single bound handler owns it (`Install` rejects a second one).
 
 ## Commands (N:1 Dispatch)
@@ -191,7 +191,7 @@ the single bound handler owns it (`Install` rejects a second one).
 Unlike events, command handlers are not subscribed ad-hoc. A command has at
 most one handler, and that handler is declared **once at the composition root**
 via `CommandBus.Install`. The N:1 rule is validated there and reported in the
-returned `InstallResult` — a duplicate or null handler never throws.
+returned `InstallResult` - a duplicate or null handler never throws.
 
 ```csharp
 public struct PlaceOrder : ICommand
@@ -200,7 +200,7 @@ public struct PlaceOrder : ICommand
     public int Quantity;
 }
 
-// The handler is just a method — it does NOT subscribe itself.
+// The handler is just a method - it does NOT subscribe itself.
 public class OrderHandler : MonoBehaviour
 {
     public void Handle(ref PlaceOrder cmd)
@@ -212,7 +212,7 @@ public class OrderHandler : MonoBehaviour
     void ProcessOrder(int itemId, int qty) { /* ... */ }
 }
 
-// ── Composition root — runs once at startup ───────────────────────
+// ── Composition root - runs once at startup ───────────────────────
 public class GameInstaller : MonoBehaviour
 {
     [SerializeField] OrderHandler _orderHandler;
@@ -228,12 +228,12 @@ public class GameInstaller : MonoBehaviour
     }
 }
 
-// Caller — same publish API as before
+// Caller - same publish API as before
 CommandBus.Publish(new PlaceOrder { ItemId = 7, Quantity = 3 });
 ```
 
-Registering a second handler for the same command type — e.g. two
-`.Handle<PlaceOrder>(...)` calls — makes `Install` return a result whose
+Registering a second handler for the same command type - e.g. two
+`.Handle<PlaceOrder>(...)` calls - makes `Install` return a result whose
 `Error` names `PlaceOrder`. The install is atomic, so the previously
 installed handlers are left untouched.
 
@@ -244,9 +244,9 @@ is a silent no-op. For commands that must be handled, assert
 A successful `Install` discards commands that were queued before it, so run it
 before anything enqueues. `Awake` works when the installer's `Awake` runs first
 (give it an early Script Execution Order); otherwise install from a
-`BeforeSceneLoad` `[RuntimeInitializeOnLoadMethod]` — see
+`BeforeSceneLoad` `[RuntimeInitializeOnLoadMethod]` - see
 [Bootstrap](Bootstrap.md#install-before-anything-enqueues).
 
 > The bundled sample does exactly this: `BasicPubSubSample.Awake` news up
 > `ScoreModel` and `MenuModel` and binds `AdjustScore`, `ResetScore`, and
-> `StartGame` through one `Install` call — see [Bootstrap](Bootstrap.md).
+> `StartGame` through one `Install` call - see [Bootstrap](Bootstrap.md).

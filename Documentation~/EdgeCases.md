@@ -19,7 +19,7 @@ the dispatch loop. This is handled correctly via an integer depth counter
 - Entries removed (marked inactive) during inner dispatch are skipped by both
   inner and outer iterations.
 
-Avoid deep reentrant chains — they consume stack proportionally to depth.
+Avoid deep reentrant chains - they consume stack proportionally to depth.
 
 ## Subscribe During Dispatch
 
@@ -40,12 +40,12 @@ after dispatch completes.
 
 `DrainQueue` is bounded by the number of messages pending when the drain
 started. A handler that enqueues a message of the *same* type during dispatch
-therefore extends the **next** frame's drain, not the current one — a
+therefore extends the **next** frame's drain, not the current one - a
 self-perpetuating handler (one that enqueues on every receipt) carries the same
 backlog from frame to frame, drained once per frame, instead of hanging the
 frame in an infinite drain loop. A handler that calls `DrainQueues` itself
-does not start a nested drain of the channel already being drained — that
-channel is skipped and the call drains the other message types — so
+does not start a nested drain of the channel already being drained - that
+channel is skipped and the call drains the other message types - so
 re-entrancy cannot extend the bound or recurse.
 
 ## Handler Exceptions
@@ -56,7 +56,7 @@ into a broken frame.
 
 ## No Channel
 
-`Publish<T>` returns immediately if no channel exists for `T` — nothing has
+`Publish<T>` returns immediately if no channel exists for `T` - nothing has
 subscribed to or enqueued `T` since the last reset. Cost: one lock-free
 `ConcurrentDictionary.TryGetValue` call.
 
@@ -71,7 +71,7 @@ profiler marker. It stays allocation-free.
 `SubscriptionAnchor`'s `OnDestroy`. Unity only calls `OnDestroy` on components
 whose GameObject has been active at least once, so a subscription anchored to a
 GameObject that is created inactive and destroyed without ever being activated
-(a pooled instance, a disabled prefab instance) is **not** disposed — its
+(a pooled instance, a disabled prefab instance) is **not** disposed - its
 handler keeps running against a destroyed object. Hold the `Subscription` (or
 use a `SubscriptionBag`) for those lifetimes.
 
@@ -92,7 +92,7 @@ between play sessions when Domain Reload is disabled. Consequences:
 ## Queued Commands and `CommandBus.Install`
 
 A successful `CommandBus.Install`, like `Reset`, replaces the bus, so commands
-still queued for the next drain are discarded rather than dispatched — including
+still queued for the next drain are discarded rather than dispatched - including
 on the first install. A command enqueued from another object's `Awake` (whose
 order relative to your installer's `Awake` is undefined) or from a worker
 thread that started early is lost. The editor and development builds log a
@@ -115,5 +115,5 @@ once after `Install`.
 
 The static `EventBus.Reset()` / `CommandBus.Reset()` / `CommandBus.Install`
 replace the bus instance. A `Subscription` taken before the swap targets the
-discarded bus, so disposing it is a harmless no-op — it can never remove a
+discarded bus, so disposing it is a harmless no-op - it can never remove a
 subscription that was made on the replacement bus.

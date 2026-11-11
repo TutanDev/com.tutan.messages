@@ -22,10 +22,10 @@ reuses the existing segment, so this settles after warm-up. The first
 These figures describe the bus itself. In the editor, while the Messages Console
 is open (or whenever `MessagesInstrumentation.Enabled` is true), each recorded
 `Publish`/`Enqueue` also allocates its record's boxed payload and subscriber
-snapshot — see [Editor Tooling](Editor.md#messages-console). Profile with the
+snapshot - see [Editor Tooling](Editor.md#messages-console). Profile with the
 window closed.
 
-Dispatch is allocation-free for any message `struct` — the bus is generic over
+Dispatch is allocation-free for any message `struct` - the bus is generic over
 the message type and passes it by `ref`, so the message is never boxed. A
 message that carries reference-type fields (`string`, arrays, collections, class
 payloads) still dispatches without allocating, but while it sits in the deferred
@@ -44,7 +44,7 @@ void Awake()
 {
     // Force channel creation with a dummy subscribe/dispose.
     // The channel's internal List is allocated once. The per-channel
-    // ConcurrentQueue is lazy — it is allocated on the first Enqueue call,
+    // ConcurrentQueue is lazy - it is allocated on the first Enqueue call,
     // so pre-warm that separately if your app uses queued dispatch.
     EventBus.Subscribe<HandGesture>((ref HandGesture _) => { }).Dispose();
     EventBus.Subscribe<FrameDecoded>((ref FrameDecoded _) => { }).Dispose();
@@ -59,7 +59,7 @@ void Awake()
 ```
 
 The `Subscribe(...).Dispose()` lambdas above allocate their delegates once, at
-warm-up — that is the point of doing it in `Awake`.
+warm-up - that is the point of doing it in `Awake`.
 
 Pre-warming does not cover everything:
 
@@ -72,4 +72,4 @@ Pre-warming does not cover everything:
   size, so this leaves one large enough to hold the peak.
 - **Handler delegates are allocated at the call site.** Converting a method
   group or a capturing lambda to `MessageHandler<T>` allocates a delegate every
-  time the conversion runs — subscribe at startup, not per frame.
+  time the conversion runs - subscribe at startup, not per frame.

@@ -12,10 +12,10 @@ hot-path workloads where a single GC spike means a dropped frame.
 
 | | |
 |---|---|
-| 🎯 **Zero-alloc dispatch** | Messages are `struct`s, delivered to handlers as `ref T` — no boxing, no copies |
+| 🎯 **Zero-alloc dispatch** | Messages are `struct`s, delivered to handlers as `ref T` - no boxing, no copies |
 | 🧵 **Thread-safe queueing** | `Enqueue` from any thread; the main thread drains in `LateUpdate` |
-| 🪙 **Disposable subscriptions** | `Subscribe` returns a `Subscription` — dispose it, bag it, or `.AddTo(this)`; no `-=`, no delegate-equality footguns |
-| 🧭 **Events vs Commands** | `IEvent` for N:M notifications, `ICommand` for N:1 intent — at most one handler per command, validated once at install |
+| 🪙 **Disposable subscriptions** | `Subscribe` returns a `Subscription` - dispose it, bag it, or `.AddTo(this)`; no `-=`, no delegate-equality footguns |
+| 🧭 **Events vs Commands** | `IEvent` for N:M notifications, `ICommand` for N:1 intent - at most one handler per command, validated once at install |
 | 🎮 **XR-aware** | Zero-allocation dispatch on the hot path, profiler markers on the dispatch path (`Publish`, `Enqueue`, `DrainQueues`) |
 | 🛠️ **Editor tooling** | Live Messages Console and serialized `EventReference` / `CommandReference` for inspector wiring |
 
@@ -26,8 +26,8 @@ hot-path workloads where a single GC spike means a dropped frame.
 | | Guide | What it covers |
 |---|---|---|
 | 📖 | [Why this library](Messages.md) | The problem, the approach, message and handler basics |
-| 📋 | [API Reference](API-Reference.md) | Every public type and member — signature and one-line description |
-| 🧪 | [Examples](Examples.md) | Basic pub/sub, subscription lifetimes, queued worker dispatch, commands — plus the runnable **Basic Publish / Subscribe** sample (Package Manager ▸ Tutan Messages ▸ Samples) |
+| 📋 | [API Reference](API-Reference.md) | Every public type and member - signature and one-line description |
+| 🧪 | [Examples](Examples.md) | Basic pub/sub, subscription lifetimes, queued worker dispatch, commands - plus the runnable **Basic Publish / Subscribe** sample (Package Manager ▸ Tutan Messages ▸ Samples) |
 | 🧵 | [Threading](Threading.md) | Which calls are main-thread-only, which are thread-safe, and why |
 | ⚡ | [Performance](Performance.md) | Cost table, allocation contract, pre-warming recipe |
 | ⚠️ | [Edge Cases](EdgeCases.md) | Reentrant publish, subscribe/unsubscribe during dispatch, exceptions, lifetime and reset caveats |
@@ -39,7 +39,7 @@ hot-path workloads where a single GC spike means a dropped frame.
 
 ## ✅ Requirements
 
-- Unity 6000.3 LTS or newer. Pure C# — no native plugins.
+- Unity 6000.3 LTS or newer. Pure C# - no native plugins.
 - The runtime uses the built-in **JSONSerialize** module
   (`com.unity.modules.jsonserialize`), which is enabled by default; the Test
   Framework dependency below keeps it enabled.

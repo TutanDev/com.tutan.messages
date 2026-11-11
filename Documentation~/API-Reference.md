@@ -8,12 +8,12 @@ Every public type in the package. Runtime types live in the `Tutan.Messages`
 namespace (assembly `Tutan.Messages`); the editor tooling lives in
 `Tutan.Messages.Editor` (assembly `Tutan.Messages.Editor`, editor only).
 
-The dispatch methods — `Publish`, `Enqueue`, `DrainQueues` — are identical
+The dispatch methods - `Publish`, `Enqueue`, `DrainQueues` - are identical
 across `EventBus` and `CommandBus` (and the underlying `MessageBus<TBase>`
 instance they wrap). The buses differ only in how handlers are registered:
 `EventBus` is a mutable N:M bus you subscribe to at any time (and unsubscribe
 by disposing the returned `Subscription`), while `CommandBus` handlers are
-declared once at the composition root via `Install` — see
+declared once at the composition root via `Install` - see
 [CommandBus](#commandbus).
 
 The shared signatures below are written against `TBase`, the bus's message base
@@ -60,9 +60,9 @@ Subscription Subscribe<T>(MessageHandler<T> handler) where T : struct, IEvent
 ```
 
 Registers `handler` for messages of type `T`. Returns a disposable
-[`Subscription`](#subscription-lifetime) — disposing it is how you
+[`Subscription`](#subscription-lifetime) - disposing it is how you
 unsubscribe. Throws `ArgumentNullException` for a null handler. Main thread
-only. `EventBus` only — for commands, see [CommandBus](#commandbus).
+only. `EventBus` only - for commands, see [CommandBus](#commandbus).
 
 ## Publish (Immediate)
 
@@ -104,7 +104,7 @@ void DrainQueues()
 Dispatches the queued messages of every channel on the bus. Each channel's drain
 is bounded by what was queued when it started: a handler that enqueues its own
 type extends the next drain, not this one. Call once per frame. Main thread
-only. By default `MessagesHost` does this for you — see
+only. By default `MessagesHost` does this for you - see
 [Bootstrap](Bootstrap.md).
 
 ## Subscription Lifetime
@@ -134,15 +134,15 @@ static class SubscriptionExtensions
 sealed class SubscriptionAnchor : MonoBehaviour   // added by AddTo(GameObject); never add it by hand
 ```
 
-`Subscribe` returns a `Subscription` — a disposable struct pairing the
+`Subscribe` returns a `Subscription` - a disposable struct pairing the
 subscription's identity with the bus instance that issued it. Disposing it
 unsubscribes. Three ways to manage that:
 
-- **Hold it and dispose explicitly** — for dynamic lifetimes (e.g. a view that
+- **Hold it and dispose explicitly** - for dynamic lifetimes (e.g. a view that
   subscribes in `OnEnable` and unsubscribes in `OnDisable`).
-- **Collect several in a `SubscriptionBag`** — one `Dispose()` releases the
+- **Collect several in a `SubscriptionBag`** - one `Dispose()` releases the
   group; the bag is reusable afterward.
-- **Tie it to a GameObject** with `.AddTo(this)` — disposal happens in
+- **Tie it to a GameObject** with `.AddTo(this)` - disposal happens in
   `OnDestroy` via one hidden `SubscriptionAnchor` component per GameObject, so
   the common MonoBehaviour pattern collapses to:
 
@@ -162,7 +162,7 @@ No handle field, no `OnDestroy`. Details and trade-offs in
   A `SubscriptionBag`'s list grows as you add to it; the anchor component is
   added once per GameObject.
 - Because the handle captures the bus *instance*, disposing a `Subscription`
-  taken before a `Reset()` is a no-op — it can never remove an unrelated
+  taken before a `Reset()` is a no-op - it can never remove an unrelated
   subscription on the replacement bus.
 - `Dispose` is main thread only, safe to call during dispatch (the handler is
   marked inactive and skipped for the remainder of the current dispatch
@@ -171,7 +171,7 @@ No handle field, no `OnDestroy`. Details and trade-offs in
 - `SubscriptionAnchor` is hidden in the Inspector, never saved into a scene or
   prefab, and `[ExecuteAlways]`, so destroying its GameObject disposes the
   subscriptions in edit mode too. A GameObject destroyed without ever having
-  been active never runs `OnDestroy` — see
+  been active never runs `OnDestroy` - see
   [Edge Cases](EdgeCases.md#addtogameobject-on-a-never-activated-gameobject).
 
 ## Diagnostics
@@ -208,11 +208,11 @@ InstallResult Install(Action<CommandRegistry> configure)
 
 On success the new bindings are swapped in atomically. On a duplicate command
 type, a null handler, or a null `configure` the live bus is left untouched and
-the failure is reported in the result — never as an exception. Calling it again
+the failure is reported in the result - never as an exception. Calling it again
 rebuilds the bus from scratch (composition-root semantics).
 
 Like `Reset`, a successful `Install` replaces the bus, so any commands still
-queued for the next drain are discarded — including on the first install. The
+queued for the next drain are discarded - including on the first install. The
 editor and development builds log a warning naming the discarded types. Install
 before anything enqueues: from a `BeforeSceneLoad`
 `[RuntimeInitializeOnLoadMethod]`, or from a bootstrap object with an early
@@ -262,7 +262,7 @@ void Reset()    // Clears all subscriptions and queues. Use on test teardown.
 On the static `EventBus` / `CommandBus`, `Reset()` disposes the current bus
 instance and swaps in a fresh one: outstanding `Subscription` handles become
 no-ops, and queued messages are discarded, not dispatched. Both buses also reset
-themselves on every Enter Play Mode — see
+themselves on every Enter Play Mode - see
 [Edge Cases](EdgeCases.md#bus-reset-on-enter-play-mode).
 `MessageBus<TBase>.Reset()` clears an instance in place.
 
@@ -288,7 +288,7 @@ class MessageBus<TBase> : IDisposable where TBase : IMessage
 
 The engine behind both facades. `Subscribe` is virtual so a subclass can add
 pre-subscribe guards. A standalone instance is **not** drained by
-`MessagesHost` — call its `DrainQueues()` yourself. `MessageBus<ICommand>` used
+`MessagesHost` - call its `DrainQueues()` yourself. `MessageBus<ICommand>` used
 directly does not enforce the N:1 rule; only `CommandBus.Install` does. Its
 instrumentation records are tagged `BusKind.Command` when `TBase` is or derives
 from `ICommand`, and `BusKind.Event` otherwise.
@@ -333,7 +333,7 @@ static class MessageTypeResolver
 ```
 
 `Publish()` on a reference whose type no longer resolves logs a warning and
-publishes nothing. These are runtime types — they work in player builds — but
+publishes nothing. These are runtime types - they work in player builds - but
 they box and parse JSON, so keep them off hot paths. See
 [Editor Tooling](Editor.md#inspector-support-serialized-message-references).
 
